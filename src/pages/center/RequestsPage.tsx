@@ -254,6 +254,20 @@ const RequestsPage = () => {
     );
   };
 
+  const getSelectableDevicesByType = (deviceType: string) => {
+    return availableDevices.filter(device => {
+      // Lọc theo loại thiết bị
+      if (device.type?.toLowerCase() !== deviceType.toLowerCase()) {
+        return false;
+      }
+      
+      // Chỉ trả về thiết bị có thể chọn được (chưa được cấp xuống phường nào)
+      // Thiết bị đã được cấp xuống phường sẽ có wardId và assignedTo
+      const isAlreadyAllocated = device.wardId && device.assignedTo;
+      return !isAlreadyAllocated;
+    });
+  };
+
   const getDeviceStatusText = (device: Device) => {
     if (device.assignedTo && device.wardName) {
       return `Đã gán cho ${device.wardName}`;
@@ -274,6 +288,17 @@ const RequestsPage = () => {
 
 
   const toggleDeviceSelection = (deviceId: string) => {
+    // Kiểm tra xem thiết bị có được cấp xuống phường nào không
+    const device = availableDevices.find(d => d.id === deviceId);
+    if (!device) return;
+    
+    // Thiết bị đã được cấp xuống phường sẽ có wardId và assignedTo
+    const isAlreadyAllocated = device.wardId && device.assignedTo;
+    if (isAlreadyAllocated) {
+      // Không cho phép chọn thiết bị đã được cấp xuống phường
+      return;
+    }
+    
     setAllocationData(prev => {
       const isSelected = prev.selectedDevices.includes(deviceId);
       if (isSelected) {
@@ -545,6 +570,14 @@ const RequestsPage = () => {
                 <Label className="text-sm font-medium">
                   Chọn thiết bị để cấp phát (Tổng: {allocationData.selectedDevices.length}/{selectedRequest.quantity}):
                 </Label>
+                <div className="text-xs text-muted-foreground mb-2">
+                  Có thể chọn: {getSelectableDevicesByType(selectedRequest.deviceType).length} thiết bị
+                  {getAvailableDevicesByType(selectedRequest.deviceType).length > getSelectableDevicesByType(selectedRequest.deviceType).length && (
+                    <span className="text-orange-600 ml-2">
+                      ({getAvailableDevicesByType(selectedRequest.deviceType).length - getSelectableDevicesByType(selectedRequest.deviceType).length} thiết bị đã được cấp xuống phường)
+                    </span>
+                  )}
+                </div>
                 <div className="max-h-60 overflow-y-auto border rounded-md p-3 space-y-2">
                   {getAvailableDevicesByType(selectedRequest.deviceType).length === 0 ? (
                     <div className="text-center py-4">
@@ -557,42 +590,99 @@ const RequestsPage = () => {
                       </p>
                     </div>
                   ) : (
-                    getAvailableDevicesByType(selectedRequest.deviceType).map(device => (
-                      <div
-                        key={device.id}
-                        className={`flex items-center space-x-3 p-2 rounded-md cursor-pointer transition-colors ${
-                          allocationData.selectedDevices.includes(device.id)
-                            ? 'bg-blue-50 border border-blue-200'
-                            : 'bg-gray-50 hover:bg-gray-100'
-                        }`}
-                        onClick={() => toggleDeviceSelection(device.id)}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={allocationData.selectedDevices.includes(device.id)}
-                          onChange={() => toggleDeviceSelection(device.id)}
-                          className="rounded"
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium">{device.name}</p>
-                            <span className={`text-xs px-2 py-1 rounded-full ${getDeviceStatusColor(device)}`}>
-                              {getDeviceStatusText(device)}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {device.specifications?.brand && `${device.specifications.brand} `}
-                            {device.specifications?.model && `${device.specifications.model} `}
-                            {device.specifications?.serialNumber && `SN: ${device.specifications.serialNumber}`}
-                          </p>
-                          {device.assignedTo && (
-                            <p className="text-xs text-orange-600 mt-1">
-                              ⚠️ Thiết bị này đã được gán cho phường/xã khác
+                    <>
+                      {/* Hiển thị thiết bị có thể chọn */}
+                      {getSelectableDevicesByType(selectedRequest.deviceType).map(device => {
+                      // Thiết bị đã được cấp xuống phường sẽ có wardId và assignedTo
+                      const isAlreadyAllocated = !!(device.wardId && device.assignedTo);
+                      const isDisabled = isAlreadyAllocated;
+                      
+                      return (
+                        <div
+                          key={device.id}
+                          className={`flex items-center space-x-3 p-2 rounded-md transition-colors ${
+                            isDisabled 
+                              ? 'bg-gray-100 cursor-not-allowed opacity-60'
+                              : allocationData.selectedDevices.includes(device.id)
+                                ? 'bg-blue-50 border border-blue-200 cursor-pointer'
+                                : 'bg-gray-50 hover:bg-gray-100 cursor-pointer'
+                          }`}
+                          onClick={() => !isDisabled && toggleDeviceSelection(device.id)}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={allocationData.selectedDevices.includes(device.id)}
+                            onChange={() => !isDisabled && toggleDeviceSelection(device.id)}
+                            disabled={isDisabled}
+                            className="rounded"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <p className={`text-sm font-medium ${isDisabled ? 'text-gray-500' : ''}`}>{device.name}</p>
+                              <span className={`text-xs px-2 py-1 rounded-full ${getDeviceStatusColor(device)}`}>
+                                {getDeviceStatusText(device)}
+                              </span>
+                            </div>
+                            <p className={`text-xs ${isDisabled ? 'text-gray-400' : 'text-muted-foreground'}`}>
+                              {device.specifications?.brand && `${device.specifications.brand} `}
+                              {device.specifications?.model && `${device.specifications.model} `}
+                              {device.specifications?.serialNumber && `SN: ${device.specifications.serialNumber}`}
                             </p>
-                          )}
+                            {device.assignedTo && (
+                              <p className="text-xs text-orange-600 mt-1">
+                                {isAlreadyAllocated 
+                                  ? '⚠️ Thiết bị này đã được cấp xuống phường/xã'
+                                  : `Đã gán cho ${device.wardName || device.assignedToName || device.assignedTo}`
+                                }
+                              </p>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })}
+                      
+                      {/* Hiển thị thiết bị không thể chọn (đã được cấp xuống phường) */}
+                      {getAvailableDevicesByType(selectedRequest.deviceType)
+                        .filter(device => {
+                          // Thiết bị đã được cấp xuống phường sẽ có wardId và assignedTo
+                          const isAlreadyAllocated = !!(device.wardId && device.assignedTo);
+                          return isAlreadyAllocated;
+                        })
+                        .map(device => {
+                          // Thiết bị đã được cấp xuống phường sẽ có wardId và assignedTo
+                          const isAlreadyAllocated = !!(device.wardId && device.assignedTo);
+                          
+                          return (
+                            <div
+                              key={device.id}
+                              className="flex items-center space-x-3 p-2 rounded-md bg-gray-100 cursor-not-allowed opacity-60"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={false}
+                                disabled={true}
+                                className="rounded"
+                              />
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-sm font-medium text-gray-500">{device.name}</p>
+                                  <span className={`text-xs px-2 py-1 rounded-full ${getDeviceStatusColor(device)}`}>
+                                    {getDeviceStatusText(device)}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-400">
+                                  {device.specifications?.brand && `${device.specifications.brand} `}
+                                  {device.specifications?.model && `${device.specifications.model} `}
+                                  {device.specifications?.serialNumber && `SN: ${device.specifications.serialNumber}`}
+                                </p>
+                                <p className="text-xs text-orange-600 mt-1">
+                                  ⚠️ Thiết bị này đã được cấp xuống phường/xã
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </>
                   )}
                 </div>
                 {allocationData.selectedDevices.length > 0 && (
