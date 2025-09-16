@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import { getRoleDisplayName } from '@/lib/auth';
-import { Monitor, Users, FileText, Settings, LogOut, Home, Package, AlertTriangle } from 'lucide-react';
+import { Monitor, Users, FileText, Settings, LogOut, Home, Package, AlertTriangle, UserCog, CheckCircle } from 'lucide-react';
 interface LayoutProps {
   children: React.ReactNode;
 }
@@ -32,6 +32,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           ...baseItems,
           { path: '/devices', label: 'Quản lý thiết bị', icon: Monitor },
           { path: '/wards', label: 'Quản lý phường', icon: Users },
+          { path: '/users', label: 'Quản lý tài khoản', icon: UserCog },
           { path: '/requests', label: 'Yêu cầu cấp phát', icon: FileText },
           { path: '/incidents', label: 'Báo cáo sự cố', icon: AlertTriangle },
           { path: '/settings', label: 'Cài đặt', icon: Settings },
@@ -41,6 +42,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           ...baseItems,
           { path: '/ward-devices', label: 'Thiết bị phường', icon: Monitor },
           { path: '/device-requests', label: 'Yêu cầu thiết bị', icon: Package },
+          { path: '/ward-requests', label: 'Nhận thiết bị', icon: CheckCircle },
           { path: '/ward-users', label: 'Quản lý người dùng', icon: Users },
           { path: '/ward-incidents', label: 'Sự cố thiết bị', icon: AlertTriangle },
         ];

@@ -74,8 +74,11 @@ const DeviceRequestsPage: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'warning';
-      case 'approved': return 'default';
+      case 'approved': return 'success';
       case 'rejected': return 'destructive';
+      case 'completed': return 'default';
+      case 'delivering': return 'secondary';
+      case 'received': return 'default';
       default: return 'secondary';
     }
   };
@@ -85,6 +88,9 @@ const DeviceRequestsPage: React.FC = () => {
       case 'pending': return 'Chờ duyệt';
       case 'approved': return 'Đã duyệt';
       case 'rejected': return 'Từ chối';
+      case 'completed': return 'Đã cấp phát';
+      case 'delivering': return 'Đang giao';
+      case 'received': return 'Đã nhận';
       default: return 'Không xác định';
     }
   };
@@ -94,6 +100,9 @@ const DeviceRequestsPage: React.FC = () => {
       case 'pending': return <Clock className="h-4 w-4" />;
       case 'approved': return <CheckCircle className="h-4 w-4" />;
       case 'rejected': return <XCircle className="h-4 w-4" />;
+      case 'completed': return <Package className="h-4 w-4" />;
+      case 'delivering': return <Package className="h-4 w-4" />;
+      case 'received': return <CheckCircle className="h-4 w-4" />;
       default: return null;
     }
   };
@@ -166,6 +175,12 @@ const DeviceRequestsPage: React.FC = () => {
   const pendingRequests = requests.filter(r => r.status === 'pending');
   const approvedRequests = requests.filter(r => r.status === 'approved');
   const rejectedRequests = requests.filter(r => r.status === 'rejected');
+  const receivedRequests = requests.filter(r => r.status === 'received');
+  
+  // Chỉ hiển thị các yêu cầu từ "Chờ duyệt" đến "Đã duyệt" (không bao gồm delivering và received)
+  const displayRequests = requests.filter(r => 
+    r.status === 'pending' || r.status === 'approved' || r.status === 'rejected'
+  );
 
   return (
     
@@ -255,7 +270,7 @@ const DeviceRequestsPage: React.FC = () => {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{requests.length}</div>
+            <div className="text-2xl font-bold">{displayRequests.length}</div>
           </CardContent>
         </Card>
 
@@ -293,7 +308,7 @@ const DeviceRequestsPage: React.FC = () => {
       {/* Requests Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Danh sách yêu cầu ({requests.length})</CardTitle>
+          <CardTitle>Danh sách yêu cầu ({displayRequests.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -308,7 +323,7 @@ const DeviceRequestsPage: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {requests.map((request) => (
+              {displayRequests.map((request) => (
                 <TableRow key={request.id}>
                   <TableCell>
                     <Badge variant="outline">{getDeviceTypeDisplayName(request.deviceType)}</Badge>

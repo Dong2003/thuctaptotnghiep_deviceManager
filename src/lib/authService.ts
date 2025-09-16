@@ -22,6 +22,7 @@ export interface User {
   role: UserRole;
   wardId?: string; // For ward and user roles
   wardName?: string; // thêm trường này
+  isActive: boolean; // thêm trường này để kiểm tra trạng thái
   createdAt: Date;
   updatedAt: Date;
 }
@@ -56,12 +57,22 @@ const convertFirebaseUser = async (firebaseUser: FirebaseUser): Promise<User | n
     const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
     if (userDoc.exists()) {
       const userData = userDoc.data();
+      
+      // Kiểm tra trạng thái tài khoản
+      if (userData.isActive === false) {
+        // Nếu tài khoản bị vô hiệu hóa, đăng xuất người dùng
+        await signOut(auth);
+        throw new Error('Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.');
+      }
+      
       return {
         id: firebaseUser.uid,
         email: firebaseUser.email!,
         displayName: firebaseUser.displayName || userData.displayName || '',
         role: userData.role || 'user',
         wardId: userData.wardId,
+        wardName: userData.wardName,
+        isActive: userData.isActive !== false, // Mặc định là true nếu không có giá trị
         createdAt: userData.createdAt?.toDate() || new Date(),
         updatedAt: userData.updatedAt?.toDate() || new Date(),
       };
@@ -85,6 +96,12 @@ export const login = async (credentials: LoginCredentials): Promise<User> => {
     const user = await convertFirebaseUser(userCredential.user);
     if (!user) {
       throw new Error('User data not found');
+    }
+    
+    // Kiểm tra lại trạng thái tài khoản sau khi convert
+    if (!user.isActive) {
+      await signOut(auth);
+      throw new Error('Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.');
     }
     
     return user;
@@ -113,6 +130,7 @@ export const register = async (credentials: RegisterCredentials): Promise<User> 
       displayName: credentials.displayName,
       role: credentials.role,
       wardId: credentials.wardId || null,
+      isActive: true, // Tài khoản mới mặc định là hoạt động
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -125,6 +143,7 @@ export const register = async (credentials: RegisterCredentials): Promise<User> 
       displayName: credentials.displayName,
       role: credentials.role,
       wardId: credentials.wardId,
+      isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -195,8 +214,14 @@ export const resetPassword = async (email: string): Promise<void> => {
 export const onAuthStateChange = (callback: (user: User | null) => void) => {
   return onAuthStateChanged(auth, async (firebaseUser) => {
     if (firebaseUser) {
-      const user = await convertFirebaseUser(firebaseUser);
-      callback(user);
+      try {
+        const user = await convertFirebaseUser(firebaseUser);
+        callback(user);
+      } catch (error: any) {
+        // Nếu có lỗi (ví dụ: tài khoản bị vô hiệu hóa), callback với null
+        console.error('Auth state change error:', error);
+        callback(null);
+      }
     } else {
       callback(null);
     }
@@ -218,6 +243,11 @@ export const getRoleDisplayName = (role: UserRole): string => {
 
 // Error handling helper
 export const getAuthErrorMessage = (error: any): string => {
+  // Kiểm tra thông báo lỗi tùy chỉnh trước
+  if (error.message && error.message.includes('vô hiệu hóa')) {
+    return error.message;
+  }
+  
   switch (error.code) {
     case 'auth/user-not-found':
       return 'Không tìm thấy tài khoản với email này';

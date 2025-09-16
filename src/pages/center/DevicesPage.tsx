@@ -168,6 +168,7 @@ const DevicesPage = () => {
       default: return status;
     }
   };
+
   const handleSaveDevice = async () => {
     if (!editingDevice) return;
   
@@ -227,7 +228,8 @@ const DevicesPage = () => {
           <p className="text-muted-foreground">Quản lý tất cả thiết bị IT trong hệ thống</p>
         </div>
 
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <div className="flex gap-2">
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
             <Button className="flex items-center space-x-2">
               <Plus className="h-4 w-4" />
@@ -473,6 +475,7 @@ const DevicesPage = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
         
         {/* Edit Device Dialog */}
 <Dialog open={!!editingDevice} onOpenChange={(open) => !open && setEditingDevice(null)}>
