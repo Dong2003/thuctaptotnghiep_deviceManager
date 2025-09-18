@@ -17,7 +17,7 @@ import { db } from "../firebase";
 export interface DeviceRequest {
   id: string;
   deviceName: string;
-  deviceType: 'camera' | 'sensor' | 'router' | 'other';
+  deviceType: string;
   quantity: number;
   reason: string;
   wardId: string;
@@ -59,7 +59,7 @@ export interface WardData {
 
 export interface CreateDeviceRequestData {
   deviceName: string;
-  deviceType: 'camera' | 'sensor' | 'router' | 'other';
+  deviceType: string;
   quantity: number;
   reason: string;
   wardId: string;
@@ -100,10 +100,18 @@ export const getWardById = async (wardId: string): Promise<WardData | null> => {
 // ------------------ DEVICE TYPE ------------------ //
 export const getDeviceTypeDisplayName = (deviceType: string) => {
   switch (deviceType) {
+    case 'pc': return 'Máy tính để bàn';
+    case 'laptop': return 'Laptop';
     case 'camera': return 'Camera';
-    case 'sensor': return 'Cảm biến';
     case 'router': return 'Router';
-    case 'other': return 'Khác';
+    case 'sensor': return 'Cảm biến';
+    case 'printer': return 'Máy in';
+    case 'monitor': return 'Màn hình';
+    case 'server': return 'Server';
+    case 'switch': return 'Switch';
+    case 'ups': return 'UPS';
+    case 'ip_phone': return 'Điện thoại IP';
+    case 'other': return 'Thiết bị khác';
     default: return deviceType; 
   }
 };

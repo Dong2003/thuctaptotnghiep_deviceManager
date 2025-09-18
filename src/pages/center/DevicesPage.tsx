@@ -27,6 +27,60 @@ const DevicesPage = () => {
   const [editingDevice, setEditingDevice] = useState<Device | null>(null);
   const { toast } = useToast();
 
+  const DEVICE_TYPES = [
+    { value: 'pc', label: 'Máy tính để bàn' },
+    { value: 'laptop', label: 'Laptop' },
+    { value: 'camera', label: 'Camera' },
+    { value: 'router', label: 'Router' },
+    { value: 'sensor', label: 'Cảm biến' },
+    { value: 'printer', label: 'Máy in' },
+    { value: 'monitor', label: 'Màn hình' },
+    { value: 'server', label: 'Server' },
+    { value: 'switch', label: 'Switch' },
+    { value: 'ups', label: 'UPS' },
+    { value: 'ip_phone', label: 'Điện thoại IP' },
+    { value: 'other', label: 'Thiết bị khác' },
+  ];
+
+  const getSpecFieldsForType = (type: string) => {
+    // Chỉ sử dụng các trường có trong schema hiện tại
+    const common = [
+      { key: 'brand', label: 'Thương hiệu', placeholder: 'VD: Dell, HP, Canon' },
+      { key: 'model', label: 'Model', placeholder: 'VD: Latitude 5520' },
+      { key: 'serialNumber', label: 'Số serial', placeholder: 'VD: ABC123456789' },
+    ];
+    const network = [
+      { key: 'ipAddress', label: 'Địa chỉ IP', placeholder: 'VD: 192.168.1.100' },
+      { key: 'macAddress', label: 'Địa chỉ MAC', placeholder: 'VD: 00:11:22:33:44:55' },
+    ];
+    const compute = [
+      { key: 'cpu', label: 'CPU', placeholder: 'VD: Intel Core i7' },
+      { key: 'ram', label: 'RAM', placeholder: 'VD: 16GB DDR4' },
+      { key: 'storage', label: 'Ổ cứng', placeholder: 'VD: 512GB SSD' },
+      { key: 'os', label: 'Hệ điều hành', placeholder: 'VD: Windows 11 Pro' },
+    ];
+
+    switch (type) {
+      case 'pc':
+      case 'laptop':
+        return [...common, ...compute, ...network];
+      case 'camera':
+        return [...common, ...network];
+      case 'router':
+      case 'switch':
+        return [...common, ...network];
+      case 'printer':
+      case 'monitor':
+      case 'server':
+      case 'sensor':
+      case 'ups':
+      case 'ip_phone':
+      case 'other':
+      default:
+        return [...common];
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -75,6 +129,7 @@ const DevicesPage = () => {
     },
     installationDate: new Date(),
   });
+  const [addQuantity, setAddQuantity] = useState(1);
 
   const filteredDevices = devices.filter(device => {
     const matchesSearch = device.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -90,7 +145,13 @@ const DevicesPage = () => {
     if (!user) return;
 
     try {
-      const deviceId = await createDevice(newDevice, user.id);
+      const quantity = Math.max(1, Number(addQuantity) || 1);
+      await Promise.all(
+        Array.from({ length: quantity }).map((_, i) => {
+          const nameWithIndex = quantity > 1 ? `${newDevice.name} #${i + 1}` : newDevice.name;
+          return createDevice({ ...newDevice, name: nameWithIndex }, user.id);
+        })
+      );
       
       // Refresh devices list
       const updatedDevices = await getDevices();
@@ -118,10 +179,13 @@ const DevicesPage = () => {
         },
         installationDate: new Date(),
       });
+      setAddQuantity(1);
 
       toast({
         title: "Thêm thiết bị thành công",
-        description: `Thiết bị ${newDevice.name} đã được thêm vào hệ thống.`,
+        description: quantity > 1 
+          ? `Đã thêm ${quantity} thiết bị vào hệ thống.` 
+          : `Thiết bị ${newDevice.name} đã được thêm vào hệ thống.`,
       });
     } catch (error: any) {
       toast({
@@ -151,10 +215,18 @@ const DevicesPage = () => {
 
   const getDeviceTypeDisplayName = (type: string) => {
     switch (type) {
+      case 'pc': return 'Máy tính để bàn';
+      case 'laptop': return 'Laptop';
       case 'camera': return 'Camera';
-      case 'sensor': return 'Cảm biến';
       case 'router': return 'Router';
-      case 'other': return 'Khác';
+      case 'sensor': return 'Cảm biến';
+      case 'printer': return 'Máy in';
+      case 'monitor': return 'Màn hình';
+      case 'server': return 'Server';
+      case 'switch': return 'Switch';
+      case 'ups': return 'UPS';
+      case 'ip_phone': return 'Điện thoại IP';
+      case 'other': return 'Thiết bị khác';
       default: return type;
     }
   };
@@ -257,28 +329,19 @@ const DevicesPage = () => {
 
               <div className="space-y-2 col-span-2">
                 <Label htmlFor="type">Loại thiết bị</Label>
-                <Input
-                  list="device-types"
-                  id="type"
+                <Select
                   value={newDevice.type}
-                  onChange={(e) => setNewDevice({...newDevice, type: e.target.value as Device['type']})}
-                  placeholder="VD: camera, sensor, router,laptop,pc, khác"
-                />
-                <datalist id="device-types">
-                <option value="camera" />
-                  <option value="sensor" />
-                  <option value="router" />
-                  <option value="laptop" />
-                  <option value="Máy tính để bàn" />
-                  <option value="Máy in" />
-                  <option value="Máy chiếu" />
-                  <option value="Server" />
-                  <option value="Switch" />
-                  <option value="UPS" />
-                  <option value="Điện thoại IP" />
-                  <option value="Thiết bị khác" />
-                  
-                </datalist>
+                  onValueChange={(value) => setNewDevice({ ...newDevice, type: value as Device['type'] })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn loại thiết bị" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEVICE_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="location">Vị trí</Label>
@@ -287,6 +350,17 @@ const DevicesPage = () => {
                   value={newDevice.location}
                   onChange={(e) => setNewDevice({...newDevice, location: e.target.value})}
                   placeholder="VD: Ngã tư Lê Lợi - Nguyễn Huệ"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="quantity">Số lượng</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  min={1}
+                  value={addQuantity}
+                  onChange={(e) => setAddQuantity(parseInt(e.target.value || '1') || 1)}
                 />
               </div>
 
@@ -309,150 +383,50 @@ const DevicesPage = () => {
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="brand">Thương hiệu</Label>
-                <Input
-                  id="brand"
-                  value={newDevice.specifications.brand}
-                  onChange={(e) => setNewDevice({
-                    ...newDevice, 
-                    specifications: {...newDevice.specifications, brand: e.target.value}
-                  })}
-                  placeholder="VD: Dell, HP, Canon"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="model">Model</Label>
-                <Input
-                  id="model"
-                  value={newDevice.specifications.model}
-                  onChange={(e) => setNewDevice({
-                    ...newDevice, 
-                    specifications: {...newDevice.specifications, model: e.target.value}
-                  })}
-                  placeholder="VD: Latitude 5520"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="serialNumber">Số serial</Label>
-                <Input
-                  id="serialNumber"
-                  value={newDevice.specifications.serialNumber}
-                  onChange={(e) => setNewDevice({
-                    ...newDevice, 
-                    specifications: {...newDevice.specifications, serialNumber: e.target.value}
-                  })}
-                  placeholder="VD: ABC123456789"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="ipAddress">Địa chỉ IP</Label>
-                <Input
-                  id="ipAddress"
-                  value={newDevice.specifications.ipAddress}
-                  onChange={(e) => setNewDevice({
-                    ...newDevice, 
-                    specifications: {...newDevice.specifications, ipAddress: e.target.value}
-                  })}
-                  placeholder="VD: 192.168.1.100"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="vendor">Nhà cung cấp</Label>
-                <Input
-                  id="vendor"
-                  value={newDevice.vendor || ''}
-                  onChange={(e) => setNewDevice({...newDevice, vendor: e.target.value})}
-                  placeholder="VD: Dell, HP, Canon"
-                />
-              </div>
-
-
-              <div className="space-y-2">
-                <Label htmlFor="macAddress">Địa chỉ MAC</Label>
-                <Input
-                  id="macAddress"
-                  value={newDevice.specifications.macAddress}
-                  onChange={(e) => setNewDevice({
-                    ...newDevice, 
-                    specifications: {...newDevice.specifications, macAddress: e.target.value}
-                  })}
-                  placeholder="VD: 00:11:22:33:44:55"
-                />
-              </div>
-              <div className="space-y-2">
-              <Label htmlFor="cpu">CPU</Label>
-              <Input
-                id="cpu"
-                value={newDevice.specifications.cpu}
-                onChange={(e) =>
-                  setNewDevice({
-                    ...newDevice,
-                    specifications: { ...newDevice.specifications, cpu: e.target.value },
-                  })
-                }
-                placeholder="VD: Intel Core i7"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="ram">RAM</Label>
-              <Input
-                id="ram"
-                value={newDevice.specifications.ram}
-                onChange={(e) =>
-                  setNewDevice({
-                    ...newDevice,
-                    specifications: { ...newDevice.specifications, ram: e.target.value },
-                  })
-                }
-                placeholder="VD: 16GB DDR4"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="storage">Ổ cứng</Label>
-              <Input
-                id="storage"
-                value={newDevice.specifications.storage}
-                onChange={(e) =>
-                  setNewDevice({
-                    ...newDevice,
-                    specifications: { ...newDevice.specifications, storage: e.target.value },
-                  })
-                }
-                placeholder="VD: 512GB SSD"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="os">Hệ điều hành</Label>
-              <Input
-                id="os"
-                value={newDevice.specifications.os}
-                onChange={(e) =>
-                  setNewDevice({
-                    ...newDevice,
-                    specifications: { ...newDevice.specifications, os: e.target.value },
-                  })
-                }
-                placeholder="VD: Windows 11 Pro"
-              />
-            </div>
-
-
-              <div className="space-y-2">
-                <Label htmlFor="description">Mô tả</Label>
-                <Textarea
-                  id="description"
-                  value={newDevice.description}
-                  onChange={(e) => setNewDevice({...newDevice, description: e.target.value})}
-                  placeholder="Mô tả chi tiết về thiết bị"
-                />
-              </div>
+              {/* Thông số/kỹ thuật hiển thị theo Loại thiết bị đã chọn */}
+              {newDevice.type && (
+                <div className="col-span-2 space-y-4 border-t pt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    {getSpecFieldsForType(newDevice.type).map((field) => (
+                      <div className="space-y-2" key={field.key}>
+                        <Label htmlFor={field.key}>{field.label}</Label>
+                        <Input
+                          id={field.key}
+                          value={(newDevice.specifications as any)[field.key] || ''}
+                          onChange={(e) =>
+                            setNewDevice({
+                              ...newDevice,
+                              specifications: {
+                                ...newDevice.specifications,
+                                [field.key]: e.target.value,
+                              },
+                            })
+                          }
+                          placeholder={field.placeholder}
+                        />
+                      </div>
+                    ))}
+                    <div className="space-y-2">
+                      <Label htmlFor="vendor">Nhà cung cấp</Label>
+                      <Input
+                        id="vendor"
+                        value={newDevice.vendor || ''}
+                        onChange={(e) => setNewDevice({ ...newDevice, vendor: e.target.value })}
+                        placeholder="VD: Dell, HP, Canon"
+                      />
+                    </div>
+                    <div className="space-y-2 col-span-2">
+                      <Label htmlFor="description">Mô tả</Label>
+                      <Textarea
+                        id="description"
+                        value={newDevice.description}
+                        onChange={(e) => setNewDevice({ ...newDevice, description: e.target.value })}
+                        placeholder="Mô tả chi tiết về thiết bị"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="installationDate">Ngày lắp đặt</Label>

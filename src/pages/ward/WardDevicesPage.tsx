@@ -73,10 +73,18 @@ const WardDevicesPage = () => {
   // --- Helpers ---
   const getDeviceTypeDisplayName = (device: Device) => {
     switch (device.type) {
+      case 'pc': return 'Máy tính để bàn';
+      case 'laptop': return 'Laptop';
       case 'camera': return 'Camera';
-      case 'sensor': return 'Cảm biến';
       case 'router': return 'Router';
-      case 'other': return 'Khác';
+      case 'sensor': return 'Cảm biến';
+      case 'printer': return 'Máy in';
+      case 'monitor': return 'Màn hình';
+      case 'server': return 'Server';
+      case 'switch': return 'Switch';
+      case 'ups': return 'UPS';
+      case 'ip_phone': return 'Điện thoại IP';
+      case 'other': return 'Thiết bị khác';
       default: return device.type;
     }
   };
@@ -312,7 +320,7 @@ const WardDevicesPage = () => {
                 {receivedDevices.map((d) => (
                   <TableRow key={d.id}>
                     <TableCell>{d.name}</TableCell>
-                    <TableCell>{d.type}</TableCell>
+                    <TableCell>{getDeviceTypeDisplayName(d)}</TableCell>
                     <TableCell>{d.assignedToName || "Chưa gán"}</TableCell>
                     <TableCell>
                       <Badge className={getStatusColor(d.status)}>
@@ -332,7 +340,7 @@ const WardDevicesPage = () => {
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <p><strong>Tên:</strong> {d.name}</p>
-                          <p><strong>Loại:</strong> {d.type || "Không rõ"}</p>
+                          <p><strong>Loại:</strong> {getDeviceTypeDisplayName(d) || "Không rõ"}</p>
                           <p><strong>Trạng thái:</strong> {d.status}</p>
                           <p><strong>Vị trí:</strong> {d.location}</p>
                           <p><strong>Phường:</strong> {d.wardName}</p>
@@ -412,7 +420,7 @@ const WardDevicesPage = () => {
                   {d.name}
                   <Badge className={getStatusColor(d.status)}>{d.status}</Badge>
                 </CardTitle>
-                <CardDescription>{d.type}</CardDescription>
+                <CardDescription>{getDeviceTypeDisplayName(d)}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
                 <p>

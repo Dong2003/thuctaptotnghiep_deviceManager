@@ -35,6 +35,21 @@ const DeviceRequestsPage: React.FC = () => {
     quantity: 1,
     reason: '',
   });
+
+  const DEVICE_TYPES = [
+    { value: 'pc', label: 'Máy tính để bàn' },
+    { value: 'laptop', label: 'Laptop' },
+    { value: 'camera', label: 'Camera' },
+    { value: 'router', label: 'Router' },
+    { value: 'sensor', label: 'Cảm biến' },
+    { value: 'printer', label: 'Máy in' },
+    { value: 'monitor', label: 'Màn hình' },
+    { value: 'server', label: 'Server' },
+    { value: 'switch', label: 'Switch' },
+    { value: 'ups', label: 'UPS' },
+    { value: 'ip_phone', label: 'Điện thoại IP' },
+    { value: 'other', label: 'Thiết bị khác' },
+  ];
   useEffect(() => {
     if (!user || !user.wardId) return;
   
@@ -210,21 +225,21 @@ const DeviceRequestsPage: React.FC = () => {
 
             <div className="space-y-4 py-4">
             <div className="space-y-2">
-            <Label htmlFor="deviceType">Loại thiết bị</Label>
-            <Input
-              list="deviceTypes"
-              id="deviceType"
-              value={newRequest.deviceType}
-              onChange={(e) => setNewRequest({ ...newRequest, deviceType: e.target.value })}
-            />
-            <datalist id="deviceTypes">
-              <option value="Laptop" />
-              <option value="Máy tính để bàn" />
-              <option value="Máy in" />
-              <option value="Màn hình" />
-              <option value="Khác" />
-            </datalist>
-          </div>
+              <Label htmlFor="deviceType">Loại thiết bị</Label>
+              <Select
+                value={newRequest.deviceType}
+                onValueChange={(value) => setNewRequest({ ...newRequest, deviceType: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn loại thiết bị" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEVICE_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
 
               <div className="space-y-2">
