@@ -4,4 +4,5 @@ export * from './incidentService';
 export * from './wardService';
 export * from './userService';
 export * from './deviceRequestService';
+export * from './statisticsService';
 export * from '../authService';
