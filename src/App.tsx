@@ -16,6 +16,7 @@ import UsersPage from "./pages/center/UsersPage";
 import RequestsPage from "./pages/center/RequestsPage";
 import IncidentsPage from "./pages/center/IncidentsPage";
 import SettingsPage from "./pages/center/SettingsPage";
+import StatisticsPage from "./pages/center/StatisticsPage";
 
 // Ward pages
 import WardDevicesPage from "./pages/ward/WardDevicesPage";
@@ -80,6 +81,7 @@ const App = () => (
             <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
             <Route path="/requests" element={<ProtectedRoute><RequestsPage /></ProtectedRoute>} />
             <Route path="/incidents" element={<ProtectedRoute><IncidentsPage /></ProtectedRoute>} />
+            <Route path="/statistics" element={<ProtectedRoute><StatisticsPage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             
             {/* Ward Routes */}
