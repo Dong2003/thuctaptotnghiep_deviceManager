@@ -57,6 +57,7 @@ export interface UpdateUserProfileData {
   avatar?: string;
   wardId?: string;
   wardName?: string;
+  role?: 'center' | 'ward' | 'user';
 }
 
 export interface UpdateUserSettingsData {

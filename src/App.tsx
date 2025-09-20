@@ -8,6 +8,7 @@ import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
+import UpdateProfileForm from "./pages/UpdateProfileForm";
 
 // Center pages
 import DevicesPage from "./pages/center/DevicesPage";
@@ -25,7 +26,7 @@ import Register from "./pages/Register";
 // User pages
 import MyDevicesPage from "./pages/user/MyDevicesPage";
 import ReportIncidentPage from "./pages/user/ReportIncidentPage";
-
+import ForgotPassword from "./pages/ForgotPassword";
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -55,6 +56,7 @@ const App = () => (
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route 
               path="/" 
               element={
@@ -71,8 +73,17 @@ const App = () => (
                 </ProtectedRoute>
               } 
             />
-            
+            <Route 
+              path="/profile" 
+              element={
+                <ProtectedRoute>
+                  <UpdateProfileForm />
+                </ProtectedRoute>
+              } 
+            />
+
             {/* Center Routes */}
+            
             <Route path="/devices" element={<ProtectedRoute><DevicesPage /></ProtectedRoute>} />
             <Route path="/wards" element={<ProtectedRoute><WardsPage /></ProtectedRoute>} />
             <Route path="/requests" element={<ProtectedRoute><RequestsPage /></ProtectedRoute>} />

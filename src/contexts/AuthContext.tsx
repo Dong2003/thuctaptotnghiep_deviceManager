@@ -120,6 +120,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const resetPassword = async (email: string): Promise<void> => {
     try {
       setError(null);
+      console.log("Reset password cho email:", email); // 👈 check log
       const { resetPassword: resetPasswordService } = await import('../lib/authService');
       await resetPasswordService(email);
     } catch (err: any) {

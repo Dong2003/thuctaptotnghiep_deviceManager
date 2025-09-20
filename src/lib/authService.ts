@@ -1,3 +1,4 @@
+import { Avatar } from '@/components/ui/avatar';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -24,6 +25,8 @@ export interface User {
   wardName?: string; // thêm trường này
   createdAt: Date;
   updatedAt: Date;
+  avatar?: string; // thêm trường này
+  isActive?: boolean; // thêm trường này
 }
 
 export interface AuthState {
@@ -62,6 +65,7 @@ const convertFirebaseUser = async (firebaseUser: FirebaseUser): Promise<User | n
         displayName: firebaseUser.displayName || userData.displayName || '',
         role: userData.role || 'user',
         wardId: userData.wardId,
+        avatar: userData.avatar,
         createdAt: userData.createdAt?.toDate() || new Date(),
         updatedAt: userData.updatedAt?.toDate() || new Date(),
       };

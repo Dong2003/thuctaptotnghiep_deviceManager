@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import { getRoleDisplayName } from '@/lib/auth';
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Monitor, Users, FileText, Settings, LogOut, Home, Package, AlertTriangle } from 'lucide-react';
 interface LayoutProps {
   children: React.ReactNode;
@@ -77,10 +78,27 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </div>
             
             <div className="flex items-center space-x-4">
+               {/* Avatar clickable */}
+                <div
+                  onClick={() => navigate("/profile")}
+                  className="cursor-pointer"
+                  title="Xem hồ sơ cá nhân"
+                >
+                  <Avatar className="h-12 w-12">
+                    <AvatarImage src={user.avatar || undefined} alt={user.displayName} />
+                    <AvatarFallback className="bg-blue-500 text-white font-bold">
+                      {user.displayName
+                        ? user.displayName.charAt(0).toUpperCase()
+                        : "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                </div>
               <div className="text-right">
                 <p className="text-sm font-medium text-foreground">{user.displayName}</p>
                 <p className="text-xs text-muted-foreground">{getRoleDisplayName(user.role)}</p>
               </div>
+              
+
               <Button
                 variant="outline"
                 size="sm"

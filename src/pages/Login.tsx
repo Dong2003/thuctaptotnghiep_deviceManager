@@ -104,7 +104,9 @@ const Login: React.FC = () => {
               Tạo tài khoản mới
             </button>
           </div>
-
+            <p className='text-center mt-2'>
+              <a href='/forgot-password' className="text-sm text-primary hover:underline">Quên mật khẩu?</a>
+            </p>
           </form>
         </CardContent>
       </Card>
