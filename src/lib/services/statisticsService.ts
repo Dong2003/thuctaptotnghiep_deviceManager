@@ -71,6 +71,24 @@ export interface ExpiryStatistics {
   }>;
 }
 
+export interface SystemStatistics {
+  devices: DeviceStatistics;
+  wards: Ward[];
+  expiry: ExpiryStatistics;
+  summary: {
+    totalDevices: number;
+    totalWards: number;
+    totalUsers: number;
+    activeDevices: number;
+    inactiveDevices: number;
+    assignedDevices: number;
+    unassignedDevices: number;
+    criticalDevices: number;
+    warningDevices: number;
+    upcomingDevices: number;
+  };
+}
+
 // Lấy thống kê tổng quan thiết bị
 export const getDeviceStatistics = async (): Promise<DeviceStatistics> => {
   try {
@@ -409,5 +427,49 @@ export const getExpiryStatistics = async (): Promise<ExpiryStatistics> => {
     };
   } catch (error: any) {
     throw new Error(error.message || 'Failed to get expiry statistics');
+  }
+};
+
+// Lấy thống kê toàn hệ thống (chỉ dành cho center)
+export const getSystemStatistics = async (): Promise<SystemStatistics> => {
+  try {
+    // Lấy tất cả thống kê song song
+    const [deviceStats, wards, expiryStats] = await Promise.all([
+      getDeviceStatistics(),
+      getAllWards(),
+      getExpiryStatistics()
+    ]);
+
+    // Tính toán tổng số người dùng
+    const usersSnapshot = await getDocs(collection(db, 'users'));
+    const totalUsers = usersSnapshot.size;
+
+    // Tính toán số thiết bị đã phân bổ và chưa phân bổ
+    const devicesSnapshot = await getDocs(collection(db, 'devices'));
+    const devices = devicesSnapshot.docs.map(doc => doc.data());
+    const assignedDevices = devices.filter(d => d.assignedTo).length;
+    const unassignedDevices = devices.length - assignedDevices;
+
+    const summary = {
+      totalDevices: deviceStats.totalDevices,
+      totalWards: wards.length,
+      totalUsers,
+      activeDevices: deviceStats.overallStatusBreakdown.active,
+      inactiveDevices: deviceStats.overallStatusBreakdown.inactive,
+      assignedDevices,
+      unassignedDevices,
+      criticalDevices: expiryStats.criticalDevices.length,
+      warningDevices: expiryStats.warningDevices.length,
+      upcomingDevices: expiryStats.upcomingDevices.length
+    };
+
+    return {
+      devices: deviceStats,
+      wards,
+      expiry: expiryStats,
+      summary
+    };
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to get system statistics');
   }
 };

@@ -79,8 +79,12 @@ const RequestsPage = () => {
 
   const handleApproveRequest = async (requestId: string) => {
     try {
-      if (!selectedRequest) return;
-      await updateDeviceRequest(requestId, { status: 'approved', notes: responseNotes });
+      if (!selectedRequest || !user) return;
+      await updateDeviceRequest(requestId, { 
+        status: 'approved', 
+        notes: responseNotes,
+        approvedBy: user.id
+      });
       toast({ title: 'Phê duyệt thành công', description: 'Yêu cầu đã được phê duyệt.' });
       fetchRequests();
       closeDialog();
@@ -91,8 +95,12 @@ const RequestsPage = () => {
 
   const handleRejectRequest = async (requestId: string) => {
     try {
-      if (!selectedRequest) return;
-      await updateDeviceRequest(requestId, { status: 'rejected', notes: responseNotes });
+      if (!selectedRequest || !user) return;
+      await updateDeviceRequest(requestId, { 
+        status: 'rejected', 
+        notes: responseNotes,
+        approvedBy: user.id
+      });
       toast({ title: 'Từ chối thành công', description: 'Yêu cầu đã bị từ chối.', variant: 'destructive' });
       fetchRequests();
       closeDialog();
