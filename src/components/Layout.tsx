@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import { getRoleDisplayName } from '@/lib/auth';
-import { Monitor, Users, FileText, Settings, LogOut, Home, Package, AlertTriangle, UserCog, CheckCircle } from 'lucide-react';
+import { Monitor, Users, FileText, Settings, LogOut, Home, Package, AlertTriangle, UserCog, CheckCircle, BarChart3 } from 'lucide-react';
 interface LayoutProps {
   children: React.ReactNode;
 }
@@ -35,6 +35,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           { path: '/users', label: 'Quản lý tài khoản', icon: UserCog },
           { path: '/requests', label: 'Yêu cầu cấp phát', icon: FileText },
           { path: '/incidents', label: 'Báo cáo sự cố', icon: AlertTriangle },
+          { path: '/statistics', label: 'Thống kê', icon: BarChart3 },
           { path: '/settings', label: 'Cài đặt', icon: Settings },
         ];
       case 'ward':
