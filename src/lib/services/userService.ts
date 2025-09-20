@@ -10,8 +10,10 @@ import {
   where,
   orderBy,
   limit,
+  setDoc,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { increment, serverTimestamp } from "firebase/firestore";
 
 export interface UserProfile {
   id: string;
@@ -135,18 +137,11 @@ export const updateUserProfile = async (
   data: UpdateUserProfileData
 ): Promise<void> => {
   try {
-    const q = query(collection(db, 'userProfiles'), where('userId', '==', userId));
-    const querySnapshot = await getDocs(q);
-    
-    if (!querySnapshot.empty) {
-      const docRef = querySnapshot.docs[0].ref;
-      await updateDoc(docRef, {
-        ...data,
-        updatedAt: new Date(),
-      });
-    } else {
-      throw new Error('User profile not found');
-    }
+    const userDocRef = doc(db, 'users', userId);
+    await updateDoc(userDocRef, {
+      ...data,
+      updatedAt: new Date(),
+    });
   } catch (error: any) {
     throw new Error(error.message || 'Failed to update user profile');
   }
@@ -154,16 +149,11 @@ export const updateUserProfile = async (
 
 export const updateLastLogin = async (userId: string): Promise<void> => {
   try {
-    const q = query(collection(db, 'userProfiles'), where('userId', '==', userId));
-    const querySnapshot = await getDocs(q);
-    
-    if (!querySnapshot.empty) {
-      const docRef = querySnapshot.docs[0].ref;
-      await updateDoc(docRef, {
-        lastLoginAt: new Date(),
-        updatedAt: new Date(),
-      });
-    }
+    const userDocRef = doc(db, 'users', userId);
+    await updateDoc(userDocRef, {
+      lastLoginAt: new Date(),
+      updatedAt: new Date(),
+    });
   } catch (error: any) {
     console.error('Failed to update last login:', error);
   }
@@ -278,20 +268,76 @@ export const getUsers = async (
   }
 };
 
+// Create user with Firebase Auth and Firestore profile
+export const createUser = async (
+  email: string,
+  password: string,
+  displayName: string,
+  role: 'center' | 'ward' | 'user',
+  wardId?: string,
+  wardName?: string,
+  additionalData?: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+  }
+): Promise<UserProfile> => {
+  try {
+    // Import Firebase Auth functions
+    const { createUserWithEmailAndPassword, updateProfile } = await import('firebase/auth');
+    const { auth } = await import('../firebase');
+    
+    // Create user with email and password
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    
+    // Update display name
+    await updateProfile(userCredential.user, {
+      displayName: displayName,
+    });
+    
+    // Create user document in Firestore
+    const userData = {
+      email: email,
+      displayName: displayName,
+      firstName: additionalData?.firstName || '',
+      lastName: additionalData?.lastName || '',
+      phone: additionalData?.phone || '',
+      role: role,
+      wardId: wardId || null,
+      wardName: wardName || null,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    await setDoc(doc(db, 'users', userCredential.user.uid), userData);
+    
+    // Create user profile
+    await createUserProfile(
+      userCredential.user.uid,
+      email,
+      displayName,
+      role,
+      wardId,
+      wardName
+    );
+    
+    return {
+      id: userCredential.user.uid,
+      ...userData,
+    } as UserProfile;
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to create user');
+  }
+};
+
 export const deactivateUser = async (userId: string): Promise<void> => {
   try {
-    const q = query(collection(db, 'userProfiles'), where('userId', '==', userId));
-    const querySnapshot = await getDocs(q);
-    
-    if (!querySnapshot.empty) {
-      const docRef = querySnapshot.docs[0].ref;
-      await updateDoc(docRef, {
-        isActive: false,
-        updatedAt: new Date(),
-      });
-    } else {
-      throw new Error('User profile not found');
-    }
+    const userDocRef = doc(db, 'users', userId);
+    await updateDoc(userDocRef, {
+      isActive: false,
+      updatedAt: new Date(),
+    });
   } catch (error: any) {
     throw new Error(error.message || 'Failed to deactivate user');
   }
@@ -299,21 +345,43 @@ export const deactivateUser = async (userId: string): Promise<void> => {
 
 export const activateUser = async (userId: string): Promise<void> => {
   try {
-    const q = query(collection(db, 'userProfiles'), where('userId', '==', userId));
-    const querySnapshot = await getDocs(q);
-    
-    if (!querySnapshot.empty) {
-      const docRef = querySnapshot.docs[0].ref;
-      await updateDoc(docRef, {
-        isActive: true,
-        updatedAt: new Date(),
-      });
-    } else {
-      throw new Error('User profile not found');
-    }
+    const userDocRef = doc(db, 'users', userId);
+    await updateDoc(userDocRef, {
+      isActive: true,
+      updatedAt: new Date(),
+    });
   } catch (error: any) {
     throw new Error(error.message || 'Failed to activate user');
   }
+};
+
+// Failed login attempts helpers
+export const incrementFailedLogin = async (email: string): Promise<number> => {
+  // Find user by email
+  const usersSnap = await getDocs(query(collection(db, 'users'), where('email', '==', email)));
+  if (usersSnap.empty) return 0;
+  const userRef = usersSnap.docs[0].ref;
+
+  // Increment failedAttempts and set lastFailedAt
+  await updateDoc(userRef, {
+    failedAttempts: increment(1),
+    lastFailedAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  const updated = await getDoc(userRef);
+  const data = updated.data() as any;
+  return data?.failedAttempts || 0;
+};
+
+export const resetFailedLogin = async (userId: string): Promise<void> => {
+  const userRef = doc(db, 'users', userId);
+  await updateDoc(userRef, { failedAttempts: 0, updatedAt: new Date() });
+};
+
+export const banUser = async (userId: string): Promise<void> => {
+  const userRef = doc(db, 'users', userId);
+  await updateDoc(userRef, { isActive: false, bannedAt: new Date(), updatedAt: new Date() });
 };
 
 // Statistics
@@ -386,4 +454,12 @@ export const getUserRoleColor = (role: string): string => {
 
 export const getUserStatusColor = (isActive: boolean): string => {
   return isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+};
+
+// Quick check: is user banned by email
+export const isUserBannedByEmail = async (email: string): Promise<boolean> => {
+  const usersSnap = await getDocs(query(collection(db, 'users'), where('email', '==', email)));
+  if (usersSnap.empty) return false;
+  const data = usersSnap.docs[0].data() as any;
+  return data?.isActive === false;
 };

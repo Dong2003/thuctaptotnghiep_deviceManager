@@ -13,13 +13,17 @@ import UpdateProfileForm from "./pages/UpdateProfileForm";
 // Center pages
 import DevicesPage from "./pages/center/DevicesPage";
 import WardsPage from "./pages/center/WardsPage";
+import UsersPage from "./pages/center/UsersPage";
 import RequestsPage from "./pages/center/RequestsPage";
 import IncidentsPage from "./pages/center/IncidentsPage";
 import SettingsPage from "./pages/center/SettingsPage";
+import StatisticsPage from "./pages/center/StatisticsPage";
+import AuditLogPage from "./pages/center/AuditLogPage";
 
 // Ward pages
 import WardDevicesPage from "./pages/ward/WardDevicesPage";
 import DeviceRequestsPage from "./pages/ward/DeviceRequestsPage";
+import WardRequestsPage from "./pages/ward/WardRequestsPage";
 import WardUsersPage from "./pages/ward/WardUsersPage";
 import WardIncidentsPage from "./pages/ward/WardIncidentsPage";
 import Register from "./pages/Register";
@@ -86,13 +90,17 @@ const App = () => (
             
             <Route path="/devices" element={<ProtectedRoute><DevicesPage /></ProtectedRoute>} />
             <Route path="/wards" element={<ProtectedRoute><WardsPage /></ProtectedRoute>} />
+            <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
             <Route path="/requests" element={<ProtectedRoute><RequestsPage /></ProtectedRoute>} />
             <Route path="/incidents" element={<ProtectedRoute><IncidentsPage /></ProtectedRoute>} />
+            <Route path="/statistics" element={<ProtectedRoute><StatisticsPage /></ProtectedRoute>} />
+            <Route path="/audit-logs" element={<ProtectedRoute><AuditLogPage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             
             {/* Ward Routes */}
             <Route path="/ward-devices" element={<ProtectedRoute><WardDevicesPage /></ProtectedRoute>} />
             <Route path="/device-requests" element={<ProtectedRoute><DeviceRequestsPage /></ProtectedRoute>} />
+            <Route path="/ward-requests" element={<ProtectedRoute><WardRequestsPage /></ProtectedRoute>} />
             <Route path="/ward-users" element={<ProtectedRoute><WardUsersPage /></ProtectedRoute>} />
             <Route path="/ward-incidents" element={<ProtectedRoute><WardIncidentsPage /></ProtectedRoute>} />
             

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Search, Edit, Trash2, Monitor, Calendar, DollarSign, Loader2 } from 'lucide-react';
+import { SpecEditor, FIELD_META, getFieldsForType } from '@/components/SpecEditor';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDevices, createDevice, updateDevice, deleteDevice, getDeviceStats, type Device } from '@/lib/services/deviceService';
 import { getWards } from '@/lib/services/wardService';
@@ -26,6 +27,60 @@ const DevicesPage = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingDevice, setEditingDevice] = useState<Device | null>(null);
   const { toast } = useToast();
+
+  const DEVICE_TYPES = [
+    { value: 'pc', label: 'Máy tính để bàn' },
+    { value: 'laptop', label: 'Laptop' },
+    { value: 'camera', label: 'Camera' },
+    { value: 'router', label: 'Router' },
+    { value: 'sensor', label: 'Cảm biến' },
+    { value: 'printer', label: 'Máy in' },
+    { value: 'monitor', label: 'Màn hình' },
+    { value: 'server', label: 'Server' },
+    { value: 'switch', label: 'Switch' },
+    { value: 'ups', label: 'UPS' },
+    { value: 'ip_phone', label: 'Điện thoại IP' },
+    { value: 'other', label: 'Thiết bị khác' },
+  ];
+
+  const getSpecFieldsForType = (type: string) => {
+    // Chỉ sử dụng các trường có trong schema hiện tại
+    const common = [
+      { key: 'brand', label: 'Thương hiệu', placeholder: 'VD: Dell, HP, Canon' },
+      { key: 'model', label: 'Model', placeholder: 'VD: Latitude 5520' },
+      { key: 'serialNumber', label: 'Số serial', placeholder: 'VD: ABC123456789' },
+    ];
+    const network = [
+      { key: 'ipAddress', label: 'Địa chỉ IP', placeholder: 'VD: 192.168.1.100' },
+      { key: 'macAddress', label: 'Địa chỉ MAC', placeholder: 'VD: 00:11:22:33:44:55' },
+    ];
+    const compute = [
+      { key: 'cpu', label: 'CPU', placeholder: 'VD: Intel Core i7' },
+      { key: 'ram', label: 'RAM', placeholder: 'VD: 16GB DDR4' },
+      { key: 'storage', label: 'Ổ cứng', placeholder: 'VD: 512GB SSD' },
+      { key: 'os', label: 'Hệ điều hành', placeholder: 'VD: Windows 11 Pro' },
+    ];
+
+    switch (type) {
+      case 'pc':
+      case 'laptop':
+        return [...common, ...compute, ...network];
+      case 'camera':
+        return [...common, ...network];
+      case 'router':
+      case 'switch':
+        return [...common, ...network];
+      case 'printer':
+      case 'monitor':
+      case 'server':
+      case 'sensor':
+      case 'ups':
+      case 'ip_phone':
+      case 'other':
+      default:
+        return [...common];
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -54,7 +109,17 @@ const DevicesPage = () => {
     fetchData();
   }, [toast]);
 
-  const [newDevice, setNewDevice] = useState({
+  const [newDevice, setNewDevice] = useState<{
+    name: string;
+    type: Device['type'];
+    location: string;
+    wardId: string;
+    wardName: string;
+    description: string;
+    vendor?: string;
+    specifications: Record<string, string>;
+    installationDate: Date;
+  }>({
     name: '',
     type: 'camera' as Device['type'],
     location: '',
@@ -75,6 +140,7 @@ const DevicesPage = () => {
     },
     installationDate: new Date(),
   });
+  const [addQuantity, setAddQuantity] = useState(1);
 
   const filteredDevices = devices.filter(device => {
     const matchesSearch = device.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -90,7 +156,13 @@ const DevicesPage = () => {
     if (!user) return;
 
     try {
-      const deviceId = await createDevice(newDevice, user.id);
+      const quantity = Math.max(1, Number(addQuantity) || 1);
+      await Promise.all(
+        Array.from({ length: quantity }).map((_, i) => {
+          const nameWithIndex = quantity > 1 ? `${newDevice.name} #${i + 1}` : newDevice.name;
+          return createDevice({ ...newDevice, name: nameWithIndex }, user.id);
+        })
+      );
       
       // Refresh devices list
       const updatedDevices = await getDevices();
@@ -118,10 +190,13 @@ const DevicesPage = () => {
         },
         installationDate: new Date(),
       });
+      setAddQuantity(1);
 
       toast({
         title: "Thêm thiết bị thành công",
-        description: `Thiết bị ${newDevice.name} đã được thêm vào hệ thống.`,
+        description: quantity > 1 
+          ? `Đã thêm ${quantity} thiết bị vào hệ thống.` 
+          : `Thiết bị ${newDevice.name} đã được thêm vào hệ thống.`,
       });
     } catch (error: any) {
       toast({
@@ -151,10 +226,18 @@ const DevicesPage = () => {
 
   const getDeviceTypeDisplayName = (type: string) => {
     switch (type) {
+      case 'pc': return 'Máy tính để bàn';
+      case 'laptop': return 'Laptop';
       case 'camera': return 'Camera';
-      case 'sensor': return 'Cảm biến';
       case 'router': return 'Router';
-      case 'other': return 'Khác';
+      case 'sensor': return 'Cảm biến';
+      case 'printer': return 'Máy in';
+      case 'monitor': return 'Màn hình';
+      case 'server': return 'Server';
+      case 'switch': return 'Switch';
+      case 'ups': return 'UPS';
+      case 'ip_phone': return 'Điện thoại IP';
+      case 'other': return 'Thiết bị khác';
       default: return type;
     }
   };
@@ -168,6 +251,7 @@ const DevicesPage = () => {
       default: return status;
     }
   };
+
   const handleSaveDevice = async () => {
     if (!editingDevice) return;
   
@@ -227,7 +311,8 @@ const DevicesPage = () => {
           <p className="text-muted-foreground">Quản lý tất cả thiết bị IT trong hệ thống</p>
         </div>
 
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <div className="flex gap-2">
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
             <Button className="flex items-center space-x-2">
               <Plus className="h-4 w-4" />
@@ -255,28 +340,19 @@ const DevicesPage = () => {
 
               <div className="space-y-2 col-span-2">
                 <Label htmlFor="type">Loại thiết bị</Label>
-                <Input
-                  list="device-types"
-                  id="type"
+                <Select
                   value={newDevice.type}
-                  onChange={(e) => setNewDevice({...newDevice, type: e.target.value as Device['type']})}
-                  placeholder="VD: camera, sensor, router,laptop,pc, khác"
-                />
-                <datalist id="device-types">
-                <option value="camera" />
-                  <option value="sensor" />
-                  <option value="router" />
-                  <option value="laptop" />
-                  <option value="Máy tính để bàn" />
-                  <option value="Máy in" />
-                  <option value="Máy chiếu" />
-                  <option value="Server" />
-                  <option value="Switch" />
-                  <option value="UPS" />
-                  <option value="Điện thoại IP" />
-                  <option value="Thiết bị khác" />
-                  
-                </datalist>
+                  onValueChange={(value) => setNewDevice({ ...newDevice, type: value as Device['type'] })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn loại thiết bị" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEVICE_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="location">Vị trí</Label>
@@ -285,6 +361,17 @@ const DevicesPage = () => {
                   value={newDevice.location}
                   onChange={(e) => setNewDevice({...newDevice, location: e.target.value})}
                   placeholder="VD: Ngã tư Lê Lợi - Nguyễn Huệ"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="quantity">Số lượng</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  min={1}
+                  value={addQuantity}
+                  onChange={(e) => setAddQuantity(parseInt(e.target.value || '1') || 1)}
                 />
               </div>
 
@@ -307,150 +394,14 @@ const DevicesPage = () => {
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="brand">Thương hiệu</Label>
-                <Input
-                  id="brand"
-                  value={newDevice.specifications.brand}
-                  onChange={(e) => setNewDevice({
-                    ...newDevice, 
-                    specifications: {...newDevice.specifications, brand: e.target.value}
-                  })}
-                  placeholder="VD: Dell, HP, Canon"
+              {/* Thông số/kỹ thuật dựa theo loại thiết bị */}
+              {newDevice.type && (
+                <SpecEditor
+                  type={newDevice.type}
+                  specifications={newDevice.specifications as any}
+                  onChange={(next) => setNewDevice({ ...newDevice, specifications: next })}
                 />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="model">Model</Label>
-                <Input
-                  id="model"
-                  value={newDevice.specifications.model}
-                  onChange={(e) => setNewDevice({
-                    ...newDevice, 
-                    specifications: {...newDevice.specifications, model: e.target.value}
-                  })}
-                  placeholder="VD: Latitude 5520"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="serialNumber">Số serial</Label>
-                <Input
-                  id="serialNumber"
-                  value={newDevice.specifications.serialNumber}
-                  onChange={(e) => setNewDevice({
-                    ...newDevice, 
-                    specifications: {...newDevice.specifications, serialNumber: e.target.value}
-                  })}
-                  placeholder="VD: ABC123456789"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="ipAddress">Địa chỉ IP</Label>
-                <Input
-                  id="ipAddress"
-                  value={newDevice.specifications.ipAddress}
-                  onChange={(e) => setNewDevice({
-                    ...newDevice, 
-                    specifications: {...newDevice.specifications, ipAddress: e.target.value}
-                  })}
-                  placeholder="VD: 192.168.1.100"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="vendor">Nhà cung cấp</Label>
-                <Input
-                  id="vendor"
-                  value={newDevice.vendor || ''}
-                  onChange={(e) => setNewDevice({...newDevice, vendor: e.target.value})}
-                  placeholder="VD: Dell, HP, Canon"
-                />
-              </div>
-
-
-              <div className="space-y-2">
-                <Label htmlFor="macAddress">Địa chỉ MAC</Label>
-                <Input
-                  id="macAddress"
-                  value={newDevice.specifications.macAddress}
-                  onChange={(e) => setNewDevice({
-                    ...newDevice, 
-                    specifications: {...newDevice.specifications, macAddress: e.target.value}
-                  })}
-                  placeholder="VD: 00:11:22:33:44:55"
-                />
-              </div>
-              <div className="space-y-2">
-              <Label htmlFor="cpu">CPU</Label>
-              <Input
-                id="cpu"
-                value={newDevice.specifications.cpu}
-                onChange={(e) =>
-                  setNewDevice({
-                    ...newDevice,
-                    specifications: { ...newDevice.specifications, cpu: e.target.value },
-                  })
-                }
-                placeholder="VD: Intel Core i7"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="ram">RAM</Label>
-              <Input
-                id="ram"
-                value={newDevice.specifications.ram}
-                onChange={(e) =>
-                  setNewDevice({
-                    ...newDevice,
-                    specifications: { ...newDevice.specifications, ram: e.target.value },
-                  })
-                }
-                placeholder="VD: 16GB DDR4"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="storage">Ổ cứng</Label>
-              <Input
-                id="storage"
-                value={newDevice.specifications.storage}
-                onChange={(e) =>
-                  setNewDevice({
-                    ...newDevice,
-                    specifications: { ...newDevice.specifications, storage: e.target.value },
-                  })
-                }
-                placeholder="VD: 512GB SSD"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="os">Hệ điều hành</Label>
-              <Input
-                id="os"
-                value={newDevice.specifications.os}
-                onChange={(e) =>
-                  setNewDevice({
-                    ...newDevice,
-                    specifications: { ...newDevice.specifications, os: e.target.value },
-                  })
-                }
-                placeholder="VD: Windows 11 Pro"
-              />
-            </div>
-
-
-              <div className="space-y-2">
-                <Label htmlFor="description">Mô tả</Label>
-                <Textarea
-                  id="description"
-                  value={newDevice.description}
-                  onChange={(e) => setNewDevice({...newDevice, description: e.target.value})}
-                  placeholder="Mô tả chi tiết về thiết bị"
-                />
-              </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="installationDate">Ngày lắp đặt</Label>
@@ -473,6 +424,7 @@ const DevicesPage = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
         
         {/* Edit Device Dialog */}
 <Dialog open={!!editingDevice} onOpenChange={(open) => !open && setEditingDevice(null)}>
@@ -497,12 +449,19 @@ const DevicesPage = () => {
 
         <div className="space-y-2 col-span-2">
           <Label htmlFor="edit-type">Loại thiết bị</Label>
-          <Input
-            id="edit-type"
+          <Select
             value={editingDevice.type}
-            onChange={(e) => setEditingDevice({...editingDevice, type: e.target.value as Device['type']})}
-            list="device-types"
-          />
+            onValueChange={(value) => setEditingDevice({ ...editingDevice, type: value as Device['type'] })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Chọn loại thiết bị" />
+            </SelectTrigger>
+            <SelectContent>
+              {DEVICE_TYPES.map((t) => (
+                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="space-y-2">
@@ -536,138 +495,12 @@ const DevicesPage = () => {
           </Select>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="edit-brand">Thương hiệu</Label>
-          <Input
-            id="edit-brand"
-            value={editingDevice.specifications?.brand || ''}
-            onChange={(e) => setEditingDevice({
-              ...editingDevice,
-              specifications: {...editingDevice.specifications, brand: e.target.value}
-            })}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="edit-model">Model</Label>
-          <Input
-            id="edit-model"
-            value={editingDevice.specifications?.model || ''}
-            onChange={(e) => setEditingDevice({
-              ...editingDevice,
-              specifications: {...editingDevice.specifications, model: e.target.value}
-            })}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="edit-serial">Số serial</Label>
-          <Input
-            id="edit-serial"
-            value={editingDevice.specifications?.serialNumber || ''}
-            onChange={(e) => setEditingDevice({
-              ...editingDevice,
-              specifications: {...editingDevice.specifications, serialNumber: e.target.value}
-            })}
-          />
-        </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-ip">IP</Label>
-              <Input
-                id="edit-ip"
-                value={editingDevice.specifications?.ipAddress || ''}
-                onChange={(e) => setEditingDevice({
-                  ...editingDevice,
-                  specifications: {...editingDevice.specifications, ipAddress: e.target.value}
-                })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-mac">MAC</Label>
-              <Input
-                id="edit-mac"
-                value={editingDevice.specifications?.macAddress || ''}
-                onChange={(e) => setEditingDevice({
-                  ...editingDevice,
-                  specifications: {...editingDevice.specifications, macAddress: e.target.value}
-                })}
-              />
-            </div>
-            <div className="space-y-2">
-            <Label htmlFor="edit-cpu">CPU</Label>
-            <Input
-              id="edit-cpu"
-              value={editingDevice.specifications?.cpu || ''}
-              onChange={(e) =>
-                setEditingDevice({
-                  ...editingDevice,
-                  specifications: { ...editingDevice.specifications, cpu: e.target.value },
-                })
-              }
-            />
-          </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-ram">RAM</Label>
-              <Input
-                id="edit-ram"
-                value={editingDevice.specifications?.ram || ''}
-                onChange={(e) =>
-                  setEditingDevice({
-                    ...editingDevice,
-                    specifications: { ...editingDevice.specifications, ram: e.target.value },
-                  })
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-storage">Ổ cứng</Label>
-              <Input
-                id="edit-storage"
-                value={editingDevice.specifications?.storage || ''}
-                onChange={(e) =>
-                  setEditingDevice({
-                    ...editingDevice,
-                    specifications: { ...editingDevice.specifications, storage: e.target.value },
-                  })
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-os">Hệ điều hành</Label>
-              <Input
-                id="edit-os"
-                value={editingDevice.specifications?.os || ''}
-                onChange={(e) =>
-                  setEditingDevice({
-                    ...editingDevice,
-                    specifications: { ...editingDevice.specifications, os: e.target.value },
-                  })
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-vendor">Nhà cung cấp</Label>
-              <Input
-                id="edit-vendor"
-                value={editingDevice.vendor || ''}
-                onChange={(e) => setEditingDevice({...editingDevice, vendor: e.target.value})}
-              />
-            </div>
-
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="edit-description">Mô tả</Label>
-              <Textarea
-                id="edit-description"
-                value={editingDevice.description || ''}
-                onChange={(e) => setEditingDevice({...editingDevice, description: e.target.value})}
-              />
-            </div>
+        {/* Thông số theo loại thiết bị - dùng SpecEditor */}
+        <SpecEditor
+          type={editingDevice.type}
+          specifications={editingDevice.specifications || {}}
+          onChange={(next) => setEditingDevice({ ...editingDevice, specifications: next })}
+        />
           </div>
         )}
 
@@ -858,9 +691,7 @@ const DevicesPage = () => {
                   </TableCell>
                   <TableCell>
                     <div>
-                      <p className="font-medium">
-                        {new Date(device.installationDate).toLocaleDateString('vi-VN')}
-                      </p>
+                      <p className="font-medium">{new Date(device.installationDate).toLocaleDateString('vi-VN')}</p>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -918,15 +749,18 @@ const DevicesPage = () => {
                         <div className="mt-4">
                           <h3 className="font-semibold">Thông số kỹ thuật</h3>
                           <ul className="list-disc list-inside text-sm">
-                            {device.specifications.brand && <li><strong>Hãng:</strong> {device.specifications.brand}</li>}
-                            {device.specifications.model && <li><strong>Model:</strong> {device.specifications.model}</li>}
-                            {device.specifications.serialNumber && <li><strong>Serial:</strong> {device.specifications.serialNumber}</li>}
-                            {device.specifications.ipAddress && <li><strong>IP:</strong> {device.specifications.ipAddress}</li>}
-                            {device.specifications.macAddress && <li><strong>MAC:</strong> {device.specifications.macAddress}</li>}
-                            {device.specifications.cpu && <li><strong>CPU:</strong> {device.specifications.cpu}</li>}
-                            {device.specifications.ram && <li><strong>RAM:</strong> {device.specifications.ram}</li>}
-                            {device.specifications.storage && <li><strong>Ổ cứng:</strong> {device.specifications.storage}</li>}
-                            {device.specifications.os && <li><strong>Hệ điều hành:</strong> {device.specifications.os}</li>}
+                            {getFieldsForType(device.type || 'other')
+                              .filter((k) => k !== 'vendor' && k !== 'description')
+                              .map((k) => {
+                                const meta = FIELD_META[k];
+                                const val = (device.specifications as any)?.[k];
+                                if (!meta || val === undefined || val === '') return null;
+                                return (
+                                  <li key={k}>
+                                    <strong>{meta.label}:</strong> {String(val)}
+                                  </li>
+                                );
+                              })}
                           </ul>
                         </div>
                       )}

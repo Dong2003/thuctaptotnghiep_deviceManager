@@ -80,6 +80,8 @@ export interface UpdateDeviceData {
   type?: string;
   status?: 'active' | 'inactive' | 'maintenance' | 'error';
   location?: string;
+  wardId?: string;
+  wardName?: string;
   vendor?: string;
   description?: string;
   specifications?: {
@@ -125,13 +127,19 @@ const buildDeviceConstraints = (
   onlyUnassigned?: boolean,
   limitCount: number = 50
 ): QueryConstraint[] => {
-  const constraints: QueryConstraint[] = [
-    orderBy("createdAt", "desc"),
-    limit(limitCount)
-  ];
+  const constraints: QueryConstraint[] = [];
 
-  if (wardId) constraints.push(where("wardId", "==", wardId));
-  if (onlyUnassigned) constraints.push(where("assignedTo", "==", null));
+  // Chỉ thêm where conditions, không thêm orderBy để tránh lỗi composite index
+  if (wardId) {
+    constraints.push(where("wardId", "==", wardId));
+  }
+  
+  if (onlyUnassigned) {
+    constraints.push(where("assignedTo", "==", null));
+  }
+
+  // Thêm limit nhưng không orderBy để tránh lỗi composite index
+  constraints.push(limit(limitCount));
 
   return constraints;
 };
@@ -146,7 +154,7 @@ export const getDevices = async (
     const q = query(collection(db, "devices"), ...constraints);
     const snapshot = await getDocs(q);
 
-    return snapshot.docs.map(doc => {
+    const devices = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -170,6 +178,9 @@ export const getDevices = async (
         updatedAt: data.updatedAt?.toDate() || new Date(),
       } as Device;
     });
+
+    // Sort trong JavaScript thay vì Firestore để tránh lỗi composite index
+    return devices.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   } catch (error: any) {
     throw new Error(error.message || "Failed to get devices");
   }
@@ -181,7 +192,6 @@ export const listenDevices = (
   limitCount: number = 50
 ) => {
   const constraints = [
-    orderBy("createdAt", "desc"),
     limit(limitCount),
     wardId ? where("wardId", "==", wardId) : undefined
   ].filter(Boolean) as QueryConstraint[];
@@ -214,9 +224,12 @@ export const listenDevices = (
       } as Device;
     });
 
+    // Sort trong JavaScript thay vì Firestore
+    const sortedDevices = allDevices.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
     // Phân loại
-    const available = allDevices.filter(d => !d.assignedTo);
-    const inUse = allDevices.filter(d => d.assignedTo);
+    const available = sortedDevices.filter(d => !d.assignedTo);
+    const inUse = sortedDevices.filter(d => d.assignedTo);
 
     callback({ available, inUse });
   }, error => {

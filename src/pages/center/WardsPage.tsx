@@ -6,16 +6,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Plus, Search, Edit, Trash2, Users, Phone, Mail } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 // Import API Firestore
-import { getWards, createWard, deleteWard, type Ward } from '@/lib/services/wardService';
+import { getWards, createWard, deleteWard, updateWard, type Ward } from '@/lib/services/wardService';
 
 const WardsPage = () => {
   const [wards, setWards] = useState<Ward[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingWardId, setEditingWardId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const [newWard, setNewWard] = useState({
@@ -30,6 +33,21 @@ const WardsPage = () => {
     area: 0,
     description: '',
     contactPerson: '', // thêm trường này
+  });
+
+  const [editWard, setEditWard] = useState({
+    name: '',
+    code: '',
+    district: '',
+    city: '',
+    address: '',
+    phone: '',
+    email: '',
+    population: 0,
+    area: 0,
+    description: '',
+    contactPerson: '',
+    isActive: true,
   });
 
   // Load wards từ Firestore
@@ -95,6 +113,49 @@ const WardsPage = () => {
         title: "Lỗi thêm phường",
         description: "Không thể thêm phường/xã mới.",
         variant: "destructive",
+      });
+    }
+  };
+
+  const openEditWard = (ward: Ward) => {
+    setEditingWardId(ward.id);
+    setEditWard({
+      name: ward.name || '',
+      code: ward.code || '',
+      district: ward.district || '',
+      city: ward.city || '',
+      address: ward.address || '',
+      phone: ward.phone || '',
+      email: ward.email || '',
+      population: ward.population || 0,
+      area: ward.area || 0,
+      description: ward.description || '',
+      contactPerson: ward.contactPerson || '',
+      isActive: ward.isActive,
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateWard = async () => {
+    if (!editingWardId) return;
+    try {
+      await updateWard(editingWardId, {
+        ...editWard,
+      });
+      const updated = await getWards();
+      setWards(updated);
+      setIsEditDialogOpen(false);
+      setEditingWardId(null);
+      toast({
+        title: 'Cập nhật thành công',
+        description: 'Thông tin phường/xã đã được cập nhật.',
+      });
+    } catch (error) {
+      console.error('Error updating ward:', error);
+      toast({
+        title: 'Lỗi cập nhật',
+        description: 'Không thể cập nhật phường/xã.',
+        variant: 'destructive',
       });
     }
   };
@@ -310,16 +371,28 @@ const WardsPage = () => {
                   </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={() => openEditWard(ward)}>
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button 
-                        variant="destructive" 
-                        size="sm"
-                        onClick={() => handleDeleteWard(ward.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="sm">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Xóa phường/xã?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Hành động này không thể hoàn tác. Dữ liệu sẽ bị xóa vĩnh viễn nếu phường không liên kết thiết bị/người dùng.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Hủy</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDeleteWard(ward.id)}>Xóa</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -328,6 +401,54 @@ const WardsPage = () => {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Edit Ward Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Sửa thông tin phường/xã</DialogTitle>
+            <DialogDescription>
+              Chỉnh sửa các thông tin cần thiết rồi lưu lại
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Tên phường/xã</Label>
+              <Input id="edit-name" value={editWard.name} onChange={(e) => setEditWard({ ...editWard, name: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-address">Địa chỉ</Label>
+              <Input id="edit-address" value={editWard.address} onChange={(e) => setEditWard({ ...editWard, address: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-code">Mã phường</Label>
+                <Input id="edit-code" value={editWard.code} onChange={(e) => setEditWard({ ...editWard, code: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-contactPerson">Người liên hệ</Label>
+                <Input id="edit-contactPerson" value={editWard.contactPerson} onChange={(e) => setEditWard({ ...editWard, contactPerson: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-phone">Số điện thoại</Label>
+                <Input id="edit-phone" value={editWard.phone} onChange={(e) => setEditWard({ ...editWard, phone: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-email">Email</Label>
+                <Input id="edit-email" type="email" value={editWard.email} onChange={(e) => setEditWard({ ...editWard, email: e.target.value })} />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Hủy</Button>
+            <Button onClick={handleUpdateWard}>Lưu thay đổi</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

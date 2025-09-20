@@ -10,7 +10,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getDevices, updateDevice, getDeviceStats, type Device } from '@/lib/services/deviceService';
 import { getWardUsers, type WardUser } from '@/lib/services/wardService';
 import { useToast } from '@/hooks/use-toast';
-import { UserProfile, getUsers } from '@/lib/services/userService';
+import { getDeviceRequests, type DeviceRequest } from '@/lib/services/deviceRequestService';
+import { FIELD_META, getFieldsForType } from '@/components/SpecEditor';
 
 const WardDevicesPage = () => {
   const { user, loading: authLoading } = useAuth();
@@ -20,7 +21,8 @@ const WardDevicesPage = () => {
   const [wardUsers, setWardUsers] = useState<WardUser[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [assignableUsers, setAssignableUsers] = useState<UserProfile[]>([]);
+  const [assignableUsers, setAssignableUsers] = useState<WardUser[]>([]);
+  const [receivedRequests, setReceivedRequests] = useState<DeviceRequest[]>([]);
 
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
@@ -36,17 +38,23 @@ const WardDevicesPage = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [devicesData, wardUsersData, statsData, usersData] = await Promise.all([
+        const [devicesData, wardUsersData, statsData, requestsData] = await Promise.all([
           getDevices(user.wardId),
           getWardUsers(user.wardId),
           getDeviceStats(user.wardId),
-          getUsers('user', user.wardId),
+          getDeviceRequests(user.wardId),
         ]);
 
         setDevices(devicesData);
         setWardUsers(wardUsersData);
         setStats(statsData);
-        setAssignableUsers(usersData);
+        // Lọc chỉ người dùng có role 'user' và đang hoạt động
+        const activeUsers = wardUsersData.filter(u => u.role === 'user' && u.isActive);
+        setAssignableUsers(activeUsers);
+        
+        // Lọc chỉ các yêu cầu đã nhận
+        const received = requestsData.filter(r => r.status === 'received');
+        setReceivedRequests(received);
 
       } catch (error: any) {
         toast({
@@ -66,10 +74,18 @@ const WardDevicesPage = () => {
   // --- Helpers ---
   const getDeviceTypeDisplayName = (device: Device) => {
     switch (device.type) {
+      case 'pc': return 'Máy tính để bàn';
+      case 'laptop': return 'Laptop';
       case 'camera': return 'Camera';
-      case 'sensor': return 'Cảm biến';
       case 'router': return 'Router';
-      case 'other': return 'Khác';
+      case 'sensor': return 'Cảm biến';
+      case 'printer': return 'Máy in';
+      case 'monitor': return 'Màn hình';
+      case 'server': return 'Server';
+      case 'switch': return 'Switch';
+      case 'ups': return 'UPS';
+      case 'ip_phone': return 'Điện thoại IP';
+      case 'other': return 'Thiết bị khác';
       default: return device.type;
     }
   };
@@ -95,8 +111,97 @@ const WardDevicesPage = () => {
   };
 
   // --- Filter devices ---
-  const availableDevices = devices.filter(d => !d.assignedTo);
-  const inUseDevices = devices.filter(d => !!d.assignedTo);
+  // Chỉ hiển thị thiết bị từ các yêu cầu đã nhận
+  const receivedDeviceIds = new Set<string>();
+  receivedRequests.forEach(request => {
+    if (request.deviceSerialNumbers) {
+      request.deviceSerialNumbers.forEach(deviceId => {
+        receivedDeviceIds.add(deviceId);
+      });
+    }
+  });
+  
+  const receivedDevices = devices.filter(d => receivedDeviceIds.has(d.id));
+  
+  // Phân biệt thiết bị có sẵn và đang sử dụng
+  // Thiết bị có sẵn: chưa gán cho người dùng cụ thể (assignedTo là null, undefined hoặc tên phường)
+  // Thiết bị đang sử dụng: đã gán cho người dùng cụ thể (assignedTo là ID người dùng)
+  const availableDevices = receivedDevices.filter(d => {
+    // Nếu assignedTo là null, undefined hoặc rỗng thì coi như chưa gán
+    if (!d.assignedTo || d.assignedTo === '') return true;
+    
+    // Kiểm tra xem assignedTo có phải là ID người dùng không (không phải tên phường)
+    const isUserId = assignableUsers.some(user => user.userId === d.assignedTo);
+    return !isUserId; // Nếu không phải ID người dùng thì coi như chưa gán cho người dùng cụ thể
+  });
+  
+  const inUseDevices = receivedDevices.filter(d => {
+    // Nếu assignedTo là null, undefined hoặc rỗng thì coi như chưa gán
+    if (!d.assignedTo || d.assignedTo === '') return false;
+    
+    // Kiểm tra xem assignedTo có phải là ID người dùng không
+    const isUserId = assignableUsers.some(user => user.userId === d.assignedTo);
+    return isUserId; // Chỉ coi là đang sử dụng nếu đã gán cho người dùng cụ thể
+  });
+
+  // --- Group devices by name and status for display ---
+  const groupDevicesByType = (deviceList: Device[]) => {
+    // Tính số lượng thực tế dựa trên trạng thái gán của từng thiết bị
+    const deviceTypeCounts: Record<string, number> = {};
+    
+    deviceList.forEach(device => {
+      const key = `${device.name}-${device.type}`;
+      deviceTypeCounts[key] = (deviceTypeCounts[key] || 0) + 1;
+    });
+    
+    // Tạo danh sách thiết bị đã nhóm với số lượng thực tế
+    const grouped: Record<string, { device: Device, count: number }> = {};
+    
+    deviceList.forEach(device => {
+      const key = `${device.name}-${device.type}`;
+      
+      if (!grouped[key]) {
+        grouped[key] = { 
+          device, 
+          count: deviceTypeCounts[key]
+        };
+      }
+    });
+    
+    return Object.values(grouped);
+  };
+
+  // Đảm bảo tất cả thiết bị có sẵn đều ở trạng thái active
+  const ensureAvailableDevicesActive = async () => {
+    const inactiveAvailableDevices = availableDevices.filter(d => d.status !== 'active');
+    if (inactiveAvailableDevices.length > 0) {
+      try {
+        await Promise.all(
+          inactiveAvailableDevices.map(device => 
+            updateDevice(device.id, { status: 'active' })
+          )
+        );
+        // Cập nhật state local
+        setDevices(devices.map(d => 
+          inactiveAvailableDevices.some(inactive => inactive.id === d.id)
+            ? { ...d, status: 'active' }
+            : d
+        ));
+      } catch (error) {
+        console.error('Error updating device status:', error);
+      }
+    }
+  };
+
+  // Gọi hàm này khi component mount hoặc khi availableDevices thay đổi
+  useEffect(() => {
+    if (availableDevices.length > 0) {
+      ensureAvailableDevicesActive();
+    }
+  }, [availableDevices.length]);
+
+  const groupedAvailableDevices = groupDevicesByType(availableDevices);
+  const groupedInUseDevices = groupDevicesByType(inUseDevices);
 
   // --- Assign dialog ---
   const openAssignDialog = (device: Device) => {
@@ -107,22 +212,22 @@ const WardDevicesPage = () => {
   const handleAssignDevice = async () => {
     if (!selectedDevice || !selectedUser) return;
     try {
-      const assignedUser = assignableUsers.find(u => u.id === selectedUser);
+      const assignedUser = assignableUsers.find(u => u.userId === selectedUser);
       await updateDevice(selectedDevice.id, {
         status: 'active',
         assignedTo: selectedUser,
-        assignedToName: assignedUser?.displayName || ''
+        assignedToName: assignedUser?.userName || ''
       });
 
       setDevices(devices.map(d =>
         d.id === selectedDevice.id
-          ? { ...d, status: 'active', assignedTo: selectedUser, assignedToName: assignedUser?.displayName || '' }
+          ? { ...d, status: 'active', assignedTo: selectedUser, assignedToName: assignedUser?.userName || '' }
           : d
       ));
 
       toast({
         title: "Gán thiết bị thành công",
-        description: `Thiết bị "${selectedDevice.name}" đã được gán.`,
+        description: `Thiết bị "${selectedDevice.name}" đã được gán cho ${assignedUser?.userName}.`,
       });
 
       setIsAssignDialogOpen(false);
@@ -139,9 +244,18 @@ const WardDevicesPage = () => {
 
   const handleReturnDevice = async (deviceId: string) => {
     try {
-      await updateDevice(deviceId, { status: 'inactive', assignedTo: undefined, assignedToName: undefined });
+      await updateDevice(deviceId, { 
+        status: 'active', // Thiết bị có sẵn luôn ở trạng thái active
+        assignedTo: null, 
+        assignedToName: null 
+      });
       setDevices(devices.map(d =>
-        d.id === deviceId ? { ...d, status: 'inactive', assignedTo: undefined, assignedToName: undefined } : d
+        d.id === deviceId ? { 
+          ...d, 
+          status: 'active', // Thiết bị có sẵn luôn ở trạng thái active
+          assignedTo: null, 
+          assignedToName: null 
+        } : d
       ));
       toast({
         title: "Thu hồi thiết bị thành công",
@@ -191,7 +305,7 @@ const WardDevicesPage = () => {
       {viewMode === "list" ? (
         <Card>
           <CardHeader>
-            <CardTitle>Danh sách thiết bị ({devices.length})</CardTitle>
+            <CardTitle>Danh sách thiết bị ({receivedDevices.length})</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
@@ -204,10 +318,10 @@ const WardDevicesPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {devices.map((d) => (
+                {receivedDevices.map((d) => (
                   <TableRow key={d.id}>
                     <TableCell>{d.name}</TableCell>
-                    <TableCell>{d.type}</TableCell>
+                    <TableCell>{getDeviceTypeDisplayName(d)}</TableCell>
                     <TableCell>{d.assignedToName || "Chưa gán"}</TableCell>
                     <TableCell>
                       <Badge className={getStatusColor(d.status)}>
@@ -227,7 +341,7 @@ const WardDevicesPage = () => {
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <p><strong>Tên:</strong> {d.name}</p>
-                          <p><strong>Loại:</strong> {d.type || "Không rõ"}</p>
+                          <p><strong>Loại:</strong> {getDeviceTypeDisplayName(d) || "Không rõ"}</p>
                           <p><strong>Trạng thái:</strong> {d.status}</p>
                           <p><strong>Vị trí:</strong> {d.location}</p>
                           <p><strong>Phường:</strong> {d.wardName}</p>
@@ -249,15 +363,16 @@ const WardDevicesPage = () => {
                         <div className="mt-4">
                           <h3 className="font-semibold">Thông số kỹ thuật</h3>
                           <ul className="list-disc list-inside text-sm">
-                            {d.specifications.brand && <li><strong>Hãng:</strong> {d.specifications.brand}</li>}
-                            {d.specifications.model && <li><strong>Model:</strong> {d.specifications.model}</li>}
-                            {d.specifications.serialNumber && <li><strong>Serial:</strong> {d.specifications.serialNumber}</li>}
-                            {d.specifications.ipAddress && <li><strong>IP:</strong> {d.specifications.ipAddress}</li>}
-                            {d.specifications.macAddress && <li><strong>MAC:</strong> {d.specifications.macAddress}</li>}
-                            {d.specifications.cpu && <li><strong>CPU:</strong> {d.specifications.cpu}</li>}
-                            {d.specifications.ram && <li><strong>RAM:</strong> {d.specifications.ram}</li>}
-                            {d.specifications.storage && <li><strong>Ổ cứng:</strong> {d.specifications.storage}</li>}
-                            {d.specifications.os && <li><strong>Hệ điều hành:</strong> {d.specifications.os}</li>}
+                            {getFieldsForType(d.type || 'other').map((k) => {
+                              const meta = FIELD_META[k];
+                              const val = (d.specifications as any)?.[k];
+                              if (!meta || val === undefined || val === '') return null;
+                              return (
+                                <li key={k}>
+                                  <strong>{meta.label}:</strong> {String(val)}
+                                </li>
+                              );
+                            })}
                           </ul>
                         </div>
                       )}
@@ -300,14 +415,14 @@ const WardDevicesPage = () => {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {devices.map((d) => (
+          {receivedDevices.map((d) => (
             <Card key={d.id}>
               <CardHeader>
                 <CardTitle className="flex justify-between">
                   {d.name}
                   <Badge className={getStatusColor(d.status)}>{d.status}</Badge>
                 </CardTitle>
-                <CardDescription>{d.type}</CardDescription>
+                <CardDescription>{getDeviceTypeDisplayName(d)}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
                 <p>
@@ -323,10 +438,19 @@ const WardDevicesPage = () => {
                     size="sm"
                     onClick={async () => {
                       if (confirm("Bạn có chắc muốn thu hồi thiết bị này?")) {
-                        await updateDevice(d.id, { assignedTo: null, assignedToName: null });
+                        await updateDevice(d.id, { 
+                          status: 'active', // Thiết bị có sẵn luôn ở trạng thái active
+                          assignedTo: null, 
+                          assignedToName: null 
+                        });
                         setDevices(prev =>
                           prev.map(dev =>
-                            dev.id === d.id ? { ...dev, assignedTo: null, assignedToName: "" } : dev
+                            dev.id === d.id ? { 
+                              ...dev, 
+                              status: 'active', // Thiết bị có sẵn luôn ở trạng thái active
+                              assignedTo: null, 
+                              assignedToName: null 
+                            } : dev
                           )
                         );
                       }
@@ -346,24 +470,27 @@ const WardDevicesPage = () => {
                       <div className="space-y-2">
                         {assignableUsers.map(user => (
                           <Button
-                            key={user.id}
+                            key={user.userId}
                             variant="outline"
                             className="w-full justify-start"
                             onClick={async () => {
                               await updateDevice(d.id, {
-                                assignedTo: user.id,
-                                assignedToName: user.displayName,
+                                assignedTo: user.userId,
+                                assignedToName: user.userName,
                               });
                               setDevices(prev =>
                                 prev.map(dev =>
                                   dev.id === d.id
-                                    ? { ...dev, assignedTo: user.id, assignedToName: user.displayName }
+                                    ? { ...dev, assignedTo: user.userId, assignedToName: user.userName }
                                     : dev
                                 )
                               );
                             }}
                           >
-                            {user.displayName}
+                            <div className="text-left">
+                              <p className="font-medium">{user.userName}</p>
+                              <p className="text-xs text-muted-foreground">{user.userEmail}</p>
+                            </div>
                           </Button>
                         ))}
                       </div>
@@ -385,7 +512,7 @@ const WardDevicesPage = () => {
             <Monitor className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.total || devices.length}</div>
+            <div className="text-2xl font-bold">{receivedDevices.length}</div>
             <p className="text-xs text-muted-foreground">Thiết bị được cấp</p>
           </CardContent>
         </Card>
@@ -396,7 +523,7 @@ const WardDevicesPage = () => {
             <Package className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-success">{stats?.active || inUseDevices.length}</div>
+            <div className="text-2xl font-bold text-success">{receivedDevices.filter(d => d.status === 'active').length}</div>
             <p className="text-xs text-muted-foreground">Đang hoạt động</p>
           </CardContent>
         </Card>
@@ -408,7 +535,7 @@ const WardDevicesPage = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-warning">
-              {devices.filter(d => d.status === 'maintenance').length}
+              {receivedDevices.filter(d => d.status === 'maintenance').length}
             </div>
             <p className="text-xs text-muted-foreground">Cần xử lý</p>
           </CardContent>
@@ -436,9 +563,11 @@ const WardDevicesPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {availableDevices.map(device => (
-                  <TableRow key={device.id}>
-                    <TableCell>{device.name}</TableCell>
+                {availableDevices.map((device, index) => (
+                  <TableRow key={`${device.id}-${index}`}>
+                    <TableCell>
+                      {device.name}
+                    </TableCell>
                     <TableCell>{getDeviceTypeDisplayName(device)}</TableCell>
                     <TableCell>
                       {device.specifications?.ipAddress && <p>IP: {device.specifications.ipAddress}</p>}
@@ -482,13 +611,15 @@ const WardDevicesPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {inUseDevices.map(device => {
-                  const assignedUser = assignableUsers.find(u => u.id === device.assignedTo);
+                {inUseDevices.map((device, index) => {
+                  const assignedUser = assignableUsers.find(u => u.userId === device.assignedTo);
                   return (
-                    <TableRow key={device.id}>
-                      <TableCell>{device.name}</TableCell>
+                    <TableRow key={`${device.id}-${index}`}>
+                      <TableCell>
+                        {device.name}
+                      </TableCell>
                       <TableCell><Badge variant="outline">{getDeviceTypeDisplayName(device)}</Badge></TableCell>
-                      <TableCell>{device.assignedToName || assignedUser?.displayName || 'Chưa gán'}</TableCell>
+                      <TableCell>{device.assignedToName || assignedUser?.userName || 'Chưa gán'}</TableCell>
                       <TableCell>
                         <Badge className={getStatusColor(device.status)}>
                           {getStatusDisplayName(device.status)}
@@ -524,9 +655,11 @@ const WardDevicesPage = () => {
               </SelectTrigger>
               <SelectContent>
                 {assignableUsers.map(u => (
-                  <SelectItem key={u.id} value={u.id}>
-                    <p className="font-medium">{u.displayName}</p>
-                    <p className="text-sm text-muted-foreground">{u.role}</p>
+                  <SelectItem key={u.userId} value={u.userId}>
+                    <div>
+                      <p className="font-medium">{u.userName}</p>
+                      <p className="text-sm text-muted-foreground">{u.userEmail}</p>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>

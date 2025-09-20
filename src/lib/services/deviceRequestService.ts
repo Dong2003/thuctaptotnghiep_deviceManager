@@ -17,15 +17,22 @@ import { db } from "../firebase";
 export interface DeviceRequest {
   id: string;
   deviceName: string;
-  deviceType: 'camera' | 'sensor' | 'router' | 'other';
+  deviceType: string;
   quantity: number;
   reason: string;
   wardId: string;
   wardName: string;
   requestedBy: string;
-  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  status: 'pending' | 'approved' | 'rejected' | 'completed' | 'delivering' | 'received';
   approvedBy?: string;
   approvedAt?: Date;
+  allocatedBy?: string;
+  allocatedAt?: Date;
+  deviceSerialNumbers?: string[];
+  deviceQuantities?: Record<string, number>; // Lưu số lượng cho từng thiết bị
+  deliveredAt?: Date;
+  receivedAt?: Date;
+  receivedBy?: string;
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -52,7 +59,7 @@ export interface WardData {
 
 export interface CreateDeviceRequestData {
   deviceName: string;
-  deviceType: 'camera' | 'sensor' | 'router' | 'other';
+  deviceType: string;
   quantity: number;
   reason: string;
   wardId: string;
@@ -61,8 +68,16 @@ export interface CreateDeviceRequestData {
 }
 
 export interface UpdateDeviceRequestData {
-  status?: 'approved' | 'rejected' | 'completed';
+  status?: 'approved' | 'rejected' | 'completed' | 'delivering' | 'received';
   approvedBy?: string;
+  approvedAt?: Date;
+  allocatedBy?: string;
+  allocatedAt?: Date;
+  deviceSerialNumbers?: string[];
+  deviceQuantities?: Record<string, number>; // Lưu số lượng cho từng thiết bị
+  deliveredAt?: Date;
+  receivedAt?: Date;
+  receivedBy?: string;
   notes?: string;
 }
 
@@ -85,10 +100,18 @@ export const getWardById = async (wardId: string): Promise<WardData | null> => {
 // ------------------ DEVICE TYPE ------------------ //
 export const getDeviceTypeDisplayName = (deviceType: string) => {
   switch (deviceType) {
+    case 'pc': return 'Máy tính để bàn';
+    case 'laptop': return 'Laptop';
     case 'camera': return 'Camera';
-    case 'sensor': return 'Cảm biến';
     case 'router': return 'Router';
-    case 'other': return 'Khác';
+    case 'sensor': return 'Cảm biến';
+    case 'printer': return 'Máy in';
+    case 'monitor': return 'Màn hình';
+    case 'server': return 'Server';
+    case 'switch': return 'Switch';
+    case 'ups': return 'UPS';
+    case 'ip_phone': return 'Điện thoại IP';
+    case 'other': return 'Thiết bị khác';
     default: return deviceType; 
   }
 };
@@ -140,27 +163,36 @@ export const getDeviceRequests = async (
   limitCount: number = 50
 ): Promise<DeviceRequest[]> => {
   try {
-    let q = query(collection(db, 'deviceRequests'), orderBy('createdAt', 'desc'), limit(limitCount));
+    // Tạo query constraints mà không có orderBy để tránh lỗi composite index
+    const constraints: any[] = [limit(limitCount)];
 
     if (wardId) {
-      q = query(q, where('wardId', '==', wardId));
+      constraints.push(where('wardId', '==', wardId));
     }
 
     if (status) {
-      q = query(q, where('status', '==', status));
+      constraints.push(where('status', '==', status));
     }
 
+    const q = query(collection(db, 'deviceRequests'), ...constraints);
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => {
+    
+    const requests = querySnapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
         ...data,
         approvedAt: data.approvedAt?.toDate(),
+        allocatedAt: data.allocatedAt?.toDate(),
+        deliveredAt: data.deliveredAt?.toDate(),
+        receivedAt: data.receivedAt?.toDate(),
         createdAt: data.createdAt?.toDate() || new Date(),
         updatedAt: data.updatedAt?.toDate() || new Date(),
       } as DeviceRequest;
     });
+
+    // Sort trong JavaScript thay vì Firestore để tránh lỗi composite index
+    return requests.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   } catch (error: any) {
     throw new Error(error.message || 'Failed to get device requests');
   }
@@ -176,6 +208,18 @@ export const updateDeviceRequest = async (
 
     if (data.status === 'approved' || data.status === 'rejected') {
       updateData.approvedAt = new Date();
+    }
+
+    if (data.status === 'completed') {
+      updateData.allocatedAt = new Date();
+    }
+
+    if (data.status === 'delivering') {
+      updateData.deliveredAt = new Date();
+    }
+
+    if (data.status === 'received') {
+      updateData.receivedAt = new Date();
     }
 
     await updateDoc(requestRef, updateData);

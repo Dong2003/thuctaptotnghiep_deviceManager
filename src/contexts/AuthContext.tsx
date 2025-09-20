@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, AuthState, onAuthStateChange, getAuthErrorMessage } from '../lib/authService';
+import { logAuthAction } from '../lib/services/auditLogService';
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
@@ -80,6 +81,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setError(null);
       setLoading(true);
+      
+      // Log logout action before actually logging out
+      if (user) {
+        try {
+          await logAuthAction(
+            user.id,
+            user.email,
+            user.displayName,
+            user.role,
+            'logout',
+            {
+              ipAddress: 'unknown',
+              userAgent: navigator.userAgent,
+              timestamp: new Date().toISOString()
+            }
+          );
+        } catch (auditError) {
+          console.error('Failed to log logout action:', auditError);
+          // Don't throw error to avoid breaking logout flow
+        }
+      }
+      
       const { logout: logoutService } = await import('../lib/authService');
       await logoutService();
     } catch (err: any) {

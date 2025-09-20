@@ -35,6 +35,21 @@ const DeviceRequestsPage: React.FC = () => {
     quantity: 1,
     reason: '',
   });
+
+  const DEVICE_TYPES = [
+    { value: 'pc', label: 'Máy tính để bàn' },
+    { value: 'laptop', label: 'Laptop' },
+    { value: 'camera', label: 'Camera' },
+    { value: 'router', label: 'Router' },
+    { value: 'sensor', label: 'Cảm biến' },
+    { value: 'printer', label: 'Máy in' },
+    { value: 'monitor', label: 'Màn hình' },
+    { value: 'server', label: 'Server' },
+    { value: 'switch', label: 'Switch' },
+    { value: 'ups', label: 'UPS' },
+    { value: 'ip_phone', label: 'Điện thoại IP' },
+    { value: 'other', label: 'Thiết bị khác' },
+  ];
   useEffect(() => {
     if (!user || !user.wardId) return;
   
@@ -74,8 +89,11 @@ const DeviceRequestsPage: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'warning';
-      case 'approved': return 'default';
+      case 'approved': return 'success';
       case 'rejected': return 'destructive';
+      case 'completed': return 'default';
+      case 'delivering': return 'secondary';
+      case 'received': return 'default';
       default: return 'secondary';
     }
   };
@@ -85,6 +103,9 @@ const DeviceRequestsPage: React.FC = () => {
       case 'pending': return 'Chờ duyệt';
       case 'approved': return 'Đã duyệt';
       case 'rejected': return 'Từ chối';
+      case 'completed': return 'Đã cấp phát';
+      case 'delivering': return 'Đang giao';
+      case 'received': return 'Đã nhận';
       default: return 'Không xác định';
     }
   };
@@ -94,6 +115,9 @@ const DeviceRequestsPage: React.FC = () => {
       case 'pending': return <Clock className="h-4 w-4" />;
       case 'approved': return <CheckCircle className="h-4 w-4" />;
       case 'rejected': return <XCircle className="h-4 w-4" />;
+      case 'completed': return <Package className="h-4 w-4" />;
+      case 'delivering': return <Package className="h-4 w-4" />;
+      case 'received': return <CheckCircle className="h-4 w-4" />;
       default: return null;
     }
   };
@@ -166,6 +190,12 @@ const DeviceRequestsPage: React.FC = () => {
   const pendingRequests = requests.filter(r => r.status === 'pending');
   const approvedRequests = requests.filter(r => r.status === 'approved');
   const rejectedRequests = requests.filter(r => r.status === 'rejected');
+  const receivedRequests = requests.filter(r => r.status === 'received');
+  
+  // Chỉ hiển thị các yêu cầu từ "Chờ duyệt" đến "Đã duyệt" (không bao gồm delivering và received)
+  const displayRequests = requests.filter(r => 
+    r.status === 'pending' || r.status === 'approved' || r.status === 'rejected'
+  );
 
   return (
     
@@ -195,21 +225,21 @@ const DeviceRequestsPage: React.FC = () => {
 
             <div className="space-y-4 py-4">
             <div className="space-y-2">
-            <Label htmlFor="deviceType">Loại thiết bị</Label>
-            <Input
-              list="deviceTypes"
-              id="deviceType"
-              value={newRequest.deviceType}
-              onChange={(e) => setNewRequest({ ...newRequest, deviceType: e.target.value })}
-            />
-            <datalist id="deviceTypes">
-              <option value="Laptop" />
-              <option value="Máy tính để bàn" />
-              <option value="Máy in" />
-              <option value="Màn hình" />
-              <option value="Khác" />
-            </datalist>
-          </div>
+              <Label htmlFor="deviceType">Loại thiết bị</Label>
+              <Select
+                value={newRequest.deviceType}
+                onValueChange={(value) => setNewRequest({ ...newRequest, deviceType: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn loại thiết bị" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEVICE_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
 
               <div className="space-y-2">
@@ -255,7 +285,7 @@ const DeviceRequestsPage: React.FC = () => {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{requests.length}</div>
+            <div className="text-2xl font-bold">{displayRequests.length}</div>
           </CardContent>
         </Card>
 
@@ -293,7 +323,7 @@ const DeviceRequestsPage: React.FC = () => {
       {/* Requests Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Danh sách yêu cầu ({requests.length})</CardTitle>
+          <CardTitle>Danh sách yêu cầu ({displayRequests.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -308,7 +338,7 @@ const DeviceRequestsPage: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {requests.map((request) => (
+              {displayRequests.map((request) => (
                 <TableRow key={request.id}>
                   <TableCell>
                     <Badge variant="outline">{getDeviceTypeDisplayName(request.deviceType)}</Badge>
