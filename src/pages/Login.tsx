@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Monitor } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { isUserBannedByEmail } from '@/lib/services/userService';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -28,6 +29,15 @@ const Login: React.FC = () => {
     }
 
     try {
+      // Quick pre-check: show popup immediately if banned
+      const banned = await isUserBannedByEmail(email);
+      if (banned) {
+        const message = 'Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.';
+        setLocalError(message);
+        toast({ title: 'Đăng nhập thất bại!', description: message, variant: 'destructive' });
+        return;
+      }
+
       await login(email, password);
 
       toast({
@@ -38,7 +48,13 @@ const Login: React.FC = () => {
 
       navigate('/dashboard');
     } catch (err: any) {
-      setLocalError(err?.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
+      const message = err?.message || 'Đăng nhập thất bại. Vui lòng thử lại.';
+      setLocalError(message);
+      toast({
+        title: 'Đăng nhập thất bại',
+        description: message,
+        variant: 'destructive',
+      });
     }
   };
 
@@ -83,11 +99,7 @@ const Login: React.FC = () => {
               />
             </div>
 
-            {(localError || authError) && (
-              <Alert variant="destructive">
-                <AlertDescription>{localError || authError}</AlertDescription>
-              </Alert>
-            )}
+            {/* Inline error removed; errors are shown via toast */}
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}

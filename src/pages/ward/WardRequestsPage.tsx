@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { DeviceRequest, getDeviceRequests, updateDeviceRequest, getDeviceTypeDisplayName } from '@/lib/services/deviceRequestService';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDevices, Device } from '@/lib/services/deviceService';
+import { FIELD_META, getFieldsForType } from '@/components/SpecEditor';
 
 const WardRequestsPage = () => {
   const [requests, setRequests] = useState<DeviceRequest[]>([]);
@@ -445,47 +446,21 @@ const WardRequestsPage = () => {
                             </Badge>
                           </div>
 
-                          {/* Thông tin kỹ thuật */}
-                          <div className="space-y-2">
-                            {device.specifications?.serialNumber && (
-                              <div className="flex items-center text-xs">
-                                <HardDrive className="h-3 w-3 mr-2 text-muted-foreground" />
-                                <span className="text-muted-foreground">SN:</span>
-                                <span className="ml-1 font-mono">{device.specifications.serialNumber}</span>
-                              </div>
-                            )}
-                            
-                            {device.specifications?.ipAddress && (
-                              <div className="flex items-center text-xs">
-                                <Monitor className="h-3 w-3 mr-2 text-muted-foreground" />
-                                <span className="text-muted-foreground">IP:</span>
-                                <span className="ml-1 font-mono">{device.specifications.ipAddress}</span>
-                              </div>
-                            )}
-
-                            {device.specifications?.cpu && (
-                              <div className="flex items-center text-xs">
-                                <Cpu className="h-3 w-3 mr-2 text-muted-foreground" />
-                                <span className="text-muted-foreground">CPU:</span>
-                                <span className="ml-1">{device.specifications.cpu}</span>
-                              </div>
-                            )}
-
-                            {device.specifications?.ram && (
-                              <div className="flex items-center text-xs">
-                                <MemoryStick className="h-3 w-3 mr-2 text-muted-foreground" />
-                                <span className="text-muted-foreground">RAM:</span>
-                                <span className="ml-1">{device.specifications.ram}</span>
-                              </div>
-                            )}
-
-                            {device.specifications?.storage && (
-                              <div className="flex items-center text-xs">
-                                <HardDrive className="h-3 w-3 mr-2 text-muted-foreground" />
-                                <span className="text-muted-foreground">Storage:</span>
-                                <span className="ml-1">{device.specifications.storage}</span>
-                              </div>
-                            )}
+                          {/* Thông tin kỹ thuật - hiển thị đầy đủ theo profile */}
+                          <div className="space-y-1 text-xs">
+                            {getFieldsForType(device.type || 'other')
+                              .filter((k) => k !== 'vendor' && k !== 'description')
+                              .map((k) => {
+                                const meta = FIELD_META[k];
+                                const val = (device.specifications as any)?.[k];
+                                if (!meta || val === undefined || val === '') return null;
+                                return (
+                                  <div key={k} className="flex items-center">
+                                    <span className="text-muted-foreground">{meta.label}:</span>
+                                    <span className="ml-1">{String(val)}</span>
+                                  </div>
+                                );
+                              })}
                           </div>
 
                           {/* Thông tin bổ sung */}

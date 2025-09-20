@@ -13,6 +13,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { increment, serverTimestamp } from "firebase/firestore";
 
 export interface UserProfile {
   id: string;
@@ -353,6 +354,35 @@ export const activateUser = async (userId: string): Promise<void> => {
   }
 };
 
+// Failed login attempts helpers
+export const incrementFailedLogin = async (email: string): Promise<number> => {
+  // Find user by email
+  const usersSnap = await getDocs(query(collection(db, 'users'), where('email', '==', email)));
+  if (usersSnap.empty) return 0;
+  const userRef = usersSnap.docs[0].ref;
+
+  // Increment failedAttempts and set lastFailedAt
+  await updateDoc(userRef, {
+    failedAttempts: increment(1),
+    lastFailedAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  const updated = await getDoc(userRef);
+  const data = updated.data() as any;
+  return data?.failedAttempts || 0;
+};
+
+export const resetFailedLogin = async (userId: string): Promise<void> => {
+  const userRef = doc(db, 'users', userId);
+  await updateDoc(userRef, { failedAttempts: 0, updatedAt: new Date() });
+};
+
+export const banUser = async (userId: string): Promise<void> => {
+  const userRef = doc(db, 'users', userId);
+  await updateDoc(userRef, { isActive: false, bannedAt: new Date(), updatedAt: new Date() });
+};
+
 // Statistics
 export const getUserStats = async (wardId?: string) => {
   try {
@@ -423,4 +453,12 @@ export const getUserRoleColor = (role: string): string => {
 
 export const getUserStatusColor = (isActive: boolean): string => {
   return isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+};
+
+// Quick check: is user banned by email
+export const isUserBannedByEmail = async (email: string): Promise<boolean> => {
+  const usersSnap = await getDocs(query(collection(db, 'users'), where('email', '==', email)));
+  if (usersSnap.empty) return false;
+  const data = usersSnap.docs[0].data() as any;
+  return data?.isActive === false;
 };

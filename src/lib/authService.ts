@@ -12,6 +12,8 @@ import {
 } from "firebase/auth";
 import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
+import { getSystemSettings } from '@/lib/services/systemSettingsService';
+import { banUser, incrementFailedLogin, resetFailedLogin } from '@/lib/services/userService';
 
 export type UserRole = 'center' | 'ward' | 'user';
 
@@ -53,35 +55,30 @@ export interface UpdateProfileData {
 
 // Convert Firebase user to our User type
 const convertFirebaseUser = async (firebaseUser: FirebaseUser): Promise<User | null> => {
-  try {
-    const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-    if (userDoc.exists()) {
-      const userData = userDoc.data();
-      
-      // Kiểm tra trạng thái tài khoản
-      if (userData.isActive === false) {
-        // Nếu tài khoản bị vô hiệu hóa, đăng xuất người dùng
-        await signOut(auth);
-        throw new Error('Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.');
-      }
-      
-      return {
-        id: firebaseUser.uid,
-        email: firebaseUser.email!,
-        displayName: firebaseUser.displayName || userData.displayName || '',
-        role: userData.role || 'user',
-        wardId: userData.wardId,
-        wardName: userData.wardName,
-        isActive: userData.isActive !== false, // Mặc định là true nếu không có giá trị
-        createdAt: userData.createdAt?.toDate() || new Date(),
-        updatedAt: userData.updatedAt?.toDate() || new Date(),
-      };
+  const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+  if (userDoc.exists()) {
+    const userData = userDoc.data();
+    
+    // Kiểm tra trạng thái tài khoản
+    if (userData.isActive === false) {
+      // Nếu tài khoản bị cấm, đăng xuất người dùng
+      await signOut(auth);
+      throw new Error('Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.');
     }
-    return null;
-  } catch (error) {
-    console.error('Error converting Firebase user:', error);
-    return null;
+    
+    return {
+      id: firebaseUser.uid,
+      email: firebaseUser.email!,
+      displayName: firebaseUser.displayName || userData.displayName || '',
+      role: userData.role || 'user',
+      wardId: userData.wardId,
+      wardName: userData.wardName,
+      isActive: userData.isActive !== false, // Mặc định là true nếu không có giá trị
+      createdAt: userData.createdAt?.toDate() || new Date(),
+      updatedAt: userData.updatedAt?.toDate() || new Date(),
+    };
   }
+  return null;
 };
 
 // Authentication functions
@@ -101,11 +98,30 @@ export const login = async (credentials: LoginCredentials): Promise<User> => {
     // Kiểm tra lại trạng thái tài khoản sau khi convert
     if (!user.isActive) {
       await signOut(auth);
-      throw new Error('Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.');
+      throw new Error('Tài khoản bạn đã bị cấm');
     }
-    
+    // Reset failed attempts on successful login
+    await resetFailedLogin(user.id);
     return user;
   } catch (error: any) {
+    // On failure: increment failed attempts and potentially ban
+    try {
+      const settings = await getSystemSettings();
+      const attempts = await incrementFailedLogin(credentials.email);
+      if (attempts >= settings.maxFailedLogins) {
+        // Ban the user (set isActive=false)
+        // Need userId, so lookup by email
+        // Note: We'll query users collection by email
+        const { getDocs, collection, query, where } = await import('firebase/firestore');
+        const { db } = await import('./firebase');
+        const snap = await getDocs(query(collection(db, 'users'), where('email', '==', credentials.email)));
+        if (!snap.empty) {
+          await banUser(snap.docs[0].id);
+        }
+      }
+    } catch (_) {
+      // swallow secondary errors
+    }
     throw new Error(error.message || 'Login failed');
   }
 };
@@ -244,15 +260,18 @@ export const getRoleDisplayName = (role: UserRole): string => {
 // Error handling helper
 export const getAuthErrorMessage = (error: any): string => {
   // Kiểm tra thông báo lỗi tùy chỉnh trước
-  if (error.message && error.message.includes('vô hiệu hóa')) {
+  if (error.message && (error.message.includes('vô hiệu hóa') || error.message.includes('bị cấm'))) {
     return error.message;
   }
   
+  // Map theo code nếu có
   switch (error.code) {
+    case 'auth/invalid-credential':
+      return 'Sai Email hoặc Mật khẩu vui lòng nhập lại.';
     case 'auth/user-not-found':
       return 'Không tìm thấy tài khoản với email này';
     case 'auth/wrong-password':
-      return 'Mật khẩu không đúng';
+      return 'Sai Email hoặc Mật khẩu vui lòng nhập lại.';
     case 'auth/email-already-in-use':
       return 'Email này đã được sử dụng';
     case 'auth/weak-password':
@@ -264,6 +283,21 @@ export const getAuthErrorMessage = (error: any): string => {
     case 'auth/network-request-failed':
       return 'Lỗi kết nối mạng';
     default:
-      return error.message || 'Có lỗi xảy ra';
+      break;
   }
+  // Fallback: dò nội dung message của Firebase
+  const msg: string = error?.message || '';
+  if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password')) {
+    return 'Sai Email hoặc Mật khẩu vui lòng nhập lại.';
+  }
+  if (msg.includes('auth/user-not-found')) {
+    return 'Không tìm thấy tài khoản với email này';
+  }
+  if (msg.includes('auth/invalid-email')) {
+    return 'Email không hợp lệ';
+  }
+  if (msg.includes('auth/too-many-requests')) {
+    return 'Quá nhiều yêu cầu. Vui lòng thử lại sau';
+  }
+  return msg || 'Có lỗi xảy ra';
 };

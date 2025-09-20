@@ -11,6 +11,7 @@ import { getDevices, updateDevice, getDeviceStats, type Device } from '@/lib/ser
 import { getWardUsers, type WardUser } from '@/lib/services/wardService';
 import { useToast } from '@/hooks/use-toast';
 import { getDeviceRequests, type DeviceRequest } from '@/lib/services/deviceRequestService';
+import { FIELD_META, getFieldsForType } from '@/components/SpecEditor';
 
 const WardDevicesPage = () => {
   const { user, loading: authLoading } = useAuth();
@@ -362,15 +363,16 @@ const WardDevicesPage = () => {
                         <div className="mt-4">
                           <h3 className="font-semibold">Thông số kỹ thuật</h3>
                           <ul className="list-disc list-inside text-sm">
-                            {d.specifications.brand && <li><strong>Hãng:</strong> {d.specifications.brand}</li>}
-                            {d.specifications.model && <li><strong>Model:</strong> {d.specifications.model}</li>}
-                            {d.specifications.serialNumber && <li><strong>Serial:</strong> {d.specifications.serialNumber}</li>}
-                            {d.specifications.ipAddress && <li><strong>IP:</strong> {d.specifications.ipAddress}</li>}
-                            {d.specifications.macAddress && <li><strong>MAC:</strong> {d.specifications.macAddress}</li>}
-                            {d.specifications.cpu && <li><strong>CPU:</strong> {d.specifications.cpu}</li>}
-                            {d.specifications.ram && <li><strong>RAM:</strong> {d.specifications.ram}</li>}
-                            {d.specifications.storage && <li><strong>Ổ cứng:</strong> {d.specifications.storage}</li>}
-                            {d.specifications.os && <li><strong>Hệ điều hành:</strong> {d.specifications.os}</li>}
+                            {getFieldsForType(d.type || 'other').map((k) => {
+                              const meta = FIELD_META[k];
+                              const val = (d.specifications as any)?.[k];
+                              if (!meta || val === undefined || val === '') return null;
+                              return (
+                                <li key={k}>
+                                  <strong>{meta.label}:</strong> {String(val)}
+                                </li>
+                              );
+                            })}
                           </ul>
                         </div>
                       )}

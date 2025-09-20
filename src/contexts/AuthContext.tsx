@@ -39,7 +39,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setError(null);
       setLoading(true);
       const { login: loginService } = await import('../lib/authService');
-      await loginService({ email, password });
+      const loggedInUser = await loginService({ email, password });
+      // Optimistically set state to reduce perceived delay before onAuthStateChange fires
+      setUser(loggedInUser);
+      setIsAuthenticated(true);
     } catch (err: any) {
       const errorMessage = getAuthErrorMessage(err);
       setError(errorMessage);
