@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Search, Edit, Trash2, Monitor, Calendar, DollarSign, Loader2 } from 'lucide-react';
+import { SpecEditor, FIELD_META, getFieldsForType } from '@/components/SpecEditor';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDevices, createDevice, updateDevice, deleteDevice, getDeviceStats, type Device } from '@/lib/services/deviceService';
 import { getWards } from '@/lib/services/wardService';
@@ -108,7 +109,17 @@ const DevicesPage = () => {
     fetchData();
   }, [toast]);
 
-  const [newDevice, setNewDevice] = useState({
+  const [newDevice, setNewDevice] = useState<{
+    name: string;
+    type: Device['type'];
+    location: string;
+    wardId: string;
+    wardName: string;
+    description: string;
+    vendor?: string;
+    specifications: Record<string, string>;
+    installationDate: Date;
+  }>({
     name: '',
     type: 'camera' as Device['type'],
     location: '',
@@ -383,49 +394,13 @@ const DevicesPage = () => {
                 </Select>
               </div>
 
-              {/* Thông số/kỹ thuật hiển thị theo Loại thiết bị đã chọn */}
+              {/* Thông số/kỹ thuật dựa theo loại thiết bị */}
               {newDevice.type && (
-                <div className="col-span-2 space-y-4 border-t pt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    {getSpecFieldsForType(newDevice.type).map((field) => (
-                      <div className="space-y-2" key={field.key}>
-                        <Label htmlFor={field.key}>{field.label}</Label>
-                        <Input
-                          id={field.key}
-                          value={(newDevice.specifications as any)[field.key] || ''}
-                          onChange={(e) =>
-                            setNewDevice({
-                              ...newDevice,
-                              specifications: {
-                                ...newDevice.specifications,
-                                [field.key]: e.target.value,
-                              },
-                            })
-                          }
-                          placeholder={field.placeholder}
-                        />
-                      </div>
-                    ))}
-                    <div className="space-y-2">
-                      <Label htmlFor="vendor">Nhà cung cấp</Label>
-                      <Input
-                        id="vendor"
-                        value={newDevice.vendor || ''}
-                        onChange={(e) => setNewDevice({ ...newDevice, vendor: e.target.value })}
-                        placeholder="VD: Dell, HP, Canon"
-                      />
-                    </div>
-                    <div className="space-y-2 col-span-2">
-                      <Label htmlFor="description">Mô tả</Label>
-                      <Textarea
-                        id="description"
-                        value={newDevice.description}
-                        onChange={(e) => setNewDevice({ ...newDevice, description: e.target.value })}
-                        placeholder="Mô tả chi tiết về thiết bị"
-                      />
-                    </div>
-                  </div>
-                </div>
+                <SpecEditor
+                  type={newDevice.type}
+                  specifications={newDevice.specifications as any}
+                  onChange={(next) => setNewDevice({ ...newDevice, specifications: next })}
+                />
               )}
 
               <div className="space-y-2">
@@ -474,12 +449,19 @@ const DevicesPage = () => {
 
         <div className="space-y-2 col-span-2">
           <Label htmlFor="edit-type">Loại thiết bị</Label>
-          <Input
-            id="edit-type"
+          <Select
             value={editingDevice.type}
-            onChange={(e) => setEditingDevice({...editingDevice, type: e.target.value as Device['type']})}
-            list="device-types"
-          />
+            onValueChange={(value) => setEditingDevice({ ...editingDevice, type: value as Device['type'] })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Chọn loại thiết bị" />
+            </SelectTrigger>
+            <SelectContent>
+              {DEVICE_TYPES.map((t) => (
+                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="space-y-2">
@@ -513,138 +495,12 @@ const DevicesPage = () => {
           </Select>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="edit-brand">Thương hiệu</Label>
-          <Input
-            id="edit-brand"
-            value={editingDevice.specifications?.brand || ''}
-            onChange={(e) => setEditingDevice({
-              ...editingDevice,
-              specifications: {...editingDevice.specifications, brand: e.target.value}
-            })}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="edit-model">Model</Label>
-          <Input
-            id="edit-model"
-            value={editingDevice.specifications?.model || ''}
-            onChange={(e) => setEditingDevice({
-              ...editingDevice,
-              specifications: {...editingDevice.specifications, model: e.target.value}
-            })}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="edit-serial">Số serial</Label>
-          <Input
-            id="edit-serial"
-            value={editingDevice.specifications?.serialNumber || ''}
-            onChange={(e) => setEditingDevice({
-              ...editingDevice,
-              specifications: {...editingDevice.specifications, serialNumber: e.target.value}
-            })}
-          />
-        </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-ip">IP</Label>
-              <Input
-                id="edit-ip"
-                value={editingDevice.specifications?.ipAddress || ''}
-                onChange={(e) => setEditingDevice({
-                  ...editingDevice,
-                  specifications: {...editingDevice.specifications, ipAddress: e.target.value}
-                })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-mac">MAC</Label>
-              <Input
-                id="edit-mac"
-                value={editingDevice.specifications?.macAddress || ''}
-                onChange={(e) => setEditingDevice({
-                  ...editingDevice,
-                  specifications: {...editingDevice.specifications, macAddress: e.target.value}
-                })}
-              />
-            </div>
-            <div className="space-y-2">
-            <Label htmlFor="edit-cpu">CPU</Label>
-            <Input
-              id="edit-cpu"
-              value={editingDevice.specifications?.cpu || ''}
-              onChange={(e) =>
-                setEditingDevice({
-                  ...editingDevice,
-                  specifications: { ...editingDevice.specifications, cpu: e.target.value },
-                })
-              }
-            />
-          </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-ram">RAM</Label>
-              <Input
-                id="edit-ram"
-                value={editingDevice.specifications?.ram || ''}
-                onChange={(e) =>
-                  setEditingDevice({
-                    ...editingDevice,
-                    specifications: { ...editingDevice.specifications, ram: e.target.value },
-                  })
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-storage">Ổ cứng</Label>
-              <Input
-                id="edit-storage"
-                value={editingDevice.specifications?.storage || ''}
-                onChange={(e) =>
-                  setEditingDevice({
-                    ...editingDevice,
-                    specifications: { ...editingDevice.specifications, storage: e.target.value },
-                  })
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-os">Hệ điều hành</Label>
-              <Input
-                id="edit-os"
-                value={editingDevice.specifications?.os || ''}
-                onChange={(e) =>
-                  setEditingDevice({
-                    ...editingDevice,
-                    specifications: { ...editingDevice.specifications, os: e.target.value },
-                  })
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-vendor">Nhà cung cấp</Label>
-              <Input
-                id="edit-vendor"
-                value={editingDevice.vendor || ''}
-                onChange={(e) => setEditingDevice({...editingDevice, vendor: e.target.value})}
-              />
-            </div>
-
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="edit-description">Mô tả</Label>
-              <Textarea
-                id="edit-description"
-                value={editingDevice.description || ''}
-                onChange={(e) => setEditingDevice({...editingDevice, description: e.target.value})}
-              />
-            </div>
+        {/* Thông số theo loại thiết bị - dùng SpecEditor */}
+        <SpecEditor
+          type={editingDevice.type}
+          specifications={editingDevice.specifications || {}}
+          onChange={(next) => setEditingDevice({ ...editingDevice, specifications: next })}
+        />
           </div>
         )}
 
@@ -835,9 +691,7 @@ const DevicesPage = () => {
                   </TableCell>
                   <TableCell>
                     <div>
-                      <p className="font-medium">
-                        {new Date(device.installationDate).toLocaleDateString('vi-VN')}
-                      </p>
+                      <p className="font-medium">{new Date(device.installationDate).toLocaleDateString('vi-VN')}</p>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -895,15 +749,18 @@ const DevicesPage = () => {
                         <div className="mt-4">
                           <h3 className="font-semibold">Thông số kỹ thuật</h3>
                           <ul className="list-disc list-inside text-sm">
-                            {device.specifications.brand && <li><strong>Hãng:</strong> {device.specifications.brand}</li>}
-                            {device.specifications.model && <li><strong>Model:</strong> {device.specifications.model}</li>}
-                            {device.specifications.serialNumber && <li><strong>Serial:</strong> {device.specifications.serialNumber}</li>}
-                            {device.specifications.ipAddress && <li><strong>IP:</strong> {device.specifications.ipAddress}</li>}
-                            {device.specifications.macAddress && <li><strong>MAC:</strong> {device.specifications.macAddress}</li>}
-                            {device.specifications.cpu && <li><strong>CPU:</strong> {device.specifications.cpu}</li>}
-                            {device.specifications.ram && <li><strong>RAM:</strong> {device.specifications.ram}</li>}
-                            {device.specifications.storage && <li><strong>Ổ cứng:</strong> {device.specifications.storage}</li>}
-                            {device.specifications.os && <li><strong>Hệ điều hành:</strong> {device.specifications.os}</li>}
+                            {getFieldsForType(device.type || 'other')
+                              .filter((k) => k !== 'vendor' && k !== 'description')
+                              .map((k) => {
+                                const meta = FIELD_META[k];
+                                const val = (device.specifications as any)?.[k];
+                                if (!meta || val === undefined || val === '') return null;
+                                return (
+                                  <li key={k}>
+                                    <strong>{meta.label}:</strong> {String(val)}
+                                  </li>
+                                );
+                              })}
                           </ul>
                         </div>
                       )}

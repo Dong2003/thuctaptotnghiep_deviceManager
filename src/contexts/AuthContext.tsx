@@ -41,33 +41,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(true);
       const { login: loginService } = await import('../lib/authService');
       await loginService({ email, password });
-      
-      // Log successful login after user state is updated
-      setTimeout(async () => {
-        try {
-          // Get fresh user data from Firestore
-          const { getCurrentUser } = await import('../lib/authService');
-          const currentUser = await getCurrentUser();
-          
-          if (currentUser) {
-            await logAuthAction(
-              currentUser.id,
-              currentUser.email,
-              currentUser.displayName,
-              currentUser.role,
-              'login',
-              {
-                ipAddress: 'unknown', // Could be enhanced to get real IP
-                userAgent: navigator.userAgent,
-                timestamp: new Date().toISOString()
-              }
-            );
-          }
-        } catch (auditError) {
-          console.error('Failed to log login action:', auditError);
-          // Don't throw error to avoid breaking login flow
-        }
-      }, 1000); // Wait for user state to update
     } catch (err: any) {
       const errorMessage = getAuthErrorMessage(err);
       setError(errorMessage);

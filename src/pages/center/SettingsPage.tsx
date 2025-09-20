@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -6,8 +6,46 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Settings, Bell, Database, Shield, Mail, Smartphone } from 'lucide-react';
+import { getSystemSettings, updateSystemSettings } from '@/lib/services/systemSettingsService';
+import { useToast } from '@/hooks/use-toast';
 
 const SettingsPage = () => {
+  const { toast } = useToast();
+  const [maxFailedLogins, setMaxFailedLogins] = useState<number>(5);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const s = await getSystemSettings();
+        setMaxFailedLogins(s.maxFailedLogins ?? 5);
+      } catch (err: any) {
+        toast({
+          title: 'Lỗi tải cài đặt',
+          description: err.message || 'Không thể tải cài đặt hệ thống',
+          variant: 'destructive',
+        });
+      }
+    };
+    load();
+  }, [toast]);
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      await updateSystemSettings({ maxFailedLogins });
+      toast({ title: 'Đã lưu cài đặt', description: 'Cài đặt hệ thống đã được cập nhật.' });
+    } catch (err: any) {
+      toast({
+        title: 'Lỗi lưu cài đặt',
+        description: err.message || 'Không thể lưu cài đặt hệ thống',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -50,6 +88,18 @@ const SettingsPage = () => {
           </div>
 
           <Separator />
+
+          <div className="space-y-2">
+            <Label htmlFor="max-failed-logins">Số lần đăng nhập sai tối đa (ban)</Label>
+            <Input
+              id="max-failed-logins"
+              type="number"
+              min={1}
+              className="w-32"
+              value={maxFailedLogins}
+              onChange={(e) => setMaxFailedLogins(Math.max(1, Number(e.target.value) || 1))}
+            />
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="backup-interval">Chu kỳ sao lưu dữ liệu (ngày)</Label>
@@ -259,8 +309,8 @@ const SettingsPage = () => {
 
       {/* Save Button */}
       <div className="flex justify-end">
-        <Button className="px-8">
-          Lưu cài đặt
+        <Button className="px-8" onClick={handleSave} disabled={saving}>
+          {saving ? 'Đang lưu...' : 'Lưu cài đặt'}
         </Button>
       </div>
     </div>
