@@ -25,7 +25,6 @@ export interface User {
   role: UserRole;
   wardId?: string; // For ward and user roles
   wardName?: string; // thêm trường này
-  isActive: boolean; // thêm trường này để kiểm tra trạng thái
   createdAt: Date;
   updatedAt: Date;
   avatar?: string; // thêm trường này
@@ -58,34 +57,17 @@ export interface UpdateProfileData {
 
 // Convert Firebase user to our User type
 const convertFirebaseUser = async (firebaseUser: FirebaseUser): Promise<User | null> => {
-<<<<<<< HEAD
-  try {
-    const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-    if (userDoc.exists()) {
-      const userData = userDoc.data();
-      return {
-        id: firebaseUser.uid,
-        email: firebaseUser.email!,
-        displayName: firebaseUser.displayName || userData.displayName || '',
-        role: userData.role || 'user',
-        wardId: userData.wardId,
-        avatar: userData.avatar,
-        createdAt: userData.createdAt?.toDate() || new Date(),
-        updatedAt: userData.updatedAt?.toDate() || new Date(),
-      };
-=======
   const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
   if (userDoc.exists()) {
     const userData = userDoc.data();
-    
+
     // Kiểm tra trạng thái tài khoản
     if (userData.isActive === false) {
       // Nếu tài khoản bị cấm, đăng xuất người dùng
       await signOut(auth);
       throw new Error('Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.');
->>>>>>> admin
     }
-    
+
     return {
       id: firebaseUser.uid,
       email: firebaseUser.email!,
@@ -93,6 +75,7 @@ const convertFirebaseUser = async (firebaseUser: FirebaseUser): Promise<User | n
       role: userData.role || 'user',
       wardId: userData.wardId,
       wardName: userData.wardName,
+      avatar: userData.avatar,
       isActive: userData.isActive !== false, // Mặc định là true nếu không có giá trị
       createdAt: userData.createdAt?.toDate() || new Date(),
       updatedAt: userData.updatedAt?.toDate() || new Date(),
@@ -100,6 +83,7 @@ const convertFirebaseUser = async (firebaseUser: FirebaseUser): Promise<User | n
   }
   return null;
 };
+
 
 // Authentication functions
 export const login = async (credentials: LoginCredentials): Promise<User> => {

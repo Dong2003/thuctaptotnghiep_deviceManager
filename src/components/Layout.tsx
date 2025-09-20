@@ -4,12 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import { getRoleDisplayName } from '@/lib/auth';
-<<<<<<< HEAD
+
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Monitor, Users, FileText, Settings, LogOut, Home, Package, AlertTriangle } from 'lucide-react';
-=======
 import { Monitor, Users, FileText, Settings, LogOut, Home, Package, AlertTriangle, UserCog, CheckCircle, BarChart3, Activity } from 'lucide-react';
->>>>>>> admin
 interface LayoutProps {
   children: React.ReactNode;
 }
