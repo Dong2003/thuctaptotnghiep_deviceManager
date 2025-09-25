@@ -13,7 +13,7 @@ import {
   QueryConstraint,
 } from "firebase/firestore";
 import { db } from "../firebase";
-
+import { WardRoom } from "./wardRoomService";
 export interface Ward {
   id: string;
   name: string;
@@ -40,12 +40,25 @@ export interface WardUser {
   userName: string;
   userEmail: string;
   role: 'ward' | 'user'
+  roomId?: string;     // phòng ban đang thuộc
+  roomName?: string;
   contactPerson: string; // thêm trường này
   isActive: boolean;
   joinedAt: Date;
   createdAt: Date;
   updatedAt: Date;
 }
+
+// export interface WardRoom {
+//   id: string;
+//   wardId: string;
+//   name: string;
+//   description?: string;
+//   isActive: boolean;
+//   createdAt: Date;
+//   updatedAt: Date;
+// }
+
 
 export interface CreateWardData {
   name: string;
@@ -76,6 +89,13 @@ export interface UpdateWardData {
   isActive?: boolean;
 }
 
+export const DEFAULT_ROOMS = [
+  "Phòng văn hóa xã hội",
+  "Phòng kinh tế",
+  "Trung tâm phục vụ hành chính công",
+  "Văn phòng UBND - HDND",
+];
+
 // Ward CRUD operations
 export const createWard = async (data: CreateWardData): Promise<string> => {
   try {
@@ -85,11 +105,25 @@ export const createWard = async (data: CreateWardData): Promise<string> => {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    
-    const docRef = await addDoc(collection(db, 'wards'), wardData);
+
+    // Tạo ward
+    const docRef = await addDoc(collection(db, "wards"), wardData);
+
+    // Tạo phòng mặc định
+    for (const roomName of DEFAULT_ROOMS) {
+      const roomData = {
+        wardId: docRef.id,
+        name: roomName,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await addDoc(collection(db, "wardRooms"), roomData);
+    }
+
     return docRef.id;
   } catch (error: any) {
-    throw new Error(error.message || 'Failed to create ward');
+    throw new Error(error.message || "Failed to create ward");
   }
 };
 
@@ -411,4 +445,52 @@ export const getRoleColor = (role: string): string => {
     case 'user': return 'bg-green-100 text-green-800';
     default: return 'bg-gray-100 text-gray-800';
   }
+};
+
+export const assignUserToRoom = async (
+  wardUserId: string,
+  roomId: string,
+  roomName: string
+): Promise<void> => {
+  try {
+    const wardUserRef = doc(db, "wardUsers", wardUserId);
+    await updateDoc(wardUserRef, {
+      roomId,
+      roomName,
+      updatedAt: new Date(),
+    });
+  } catch (error: any) {
+    throw new Error(error.message || "Failed to assign user to room");
+  }
+};
+export const getWardRooms = async (wardId: string): Promise<WardRoom[]> => {
+  const ref = collection(db, "wardRooms");
+  const q = query(ref, where("wardId", "==", wardId));
+  const snap = await getDocs(q);
+
+  return snap.docs.map(doc => ({
+    id: doc.id,
+    ...(doc.data() as Omit<WardRoom, "id">),
+  }));
+};
+
+export const getUsersInRoom = async (roomId: string): Promise<WardUser[]> => {
+  const q = query(collection(db, "wardUsers"), where("roomId", "==", roomId));
+  const snap = await getDocs(q);
+  return snap.docs.map(
+    (doc) =>
+      ({
+        id: doc.id,
+        ...doc.data(),
+      } as WardUser)
+  );
+};
+export const getUnassignedUsers = async (wardId: string): Promise<WardUser[]> => {
+  const q = query(
+    collection(db, "wardUsers"),
+    where("wardId", "==", wardId),
+    where("roomId", "==", "")
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as WardUser));
 };

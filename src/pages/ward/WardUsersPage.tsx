@@ -11,16 +11,18 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, Edit, Trash2, Users, UserCheck, UserX } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getWardUsers, addWardUser, updateWardUser, deleteWardUser } from "@/lib/services/wardService";
+import { getWardUsers, addWardUser, updateWardUser, deleteWardUser,assignUserToRoom ,getWardRooms } from "@/lib/services/wardService";
 import { useAuth } from "@/contexts/AuthContext";
 
 import type { WardUser } from "@/lib/services/wardService";
+import type { WardRoom } from "@/lib/services/wardRoomService";
 
 const WardUsersPage = () => {
   const { user } = useAuth();
   const wardId = user?.wardId; // phường của người đăng nhập
   const [users, setUsers] = useState<WardUser[]>([]);
   const { toast } = useToast();
+  const [rooms, setRooms] = useState<WardRoom[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -46,6 +48,10 @@ const WardUsersPage = () => {
   
     fetchUsers();
   }, [wardId]);
+  useEffect(() => {
+  if (!wardId) return;
+  getWardRooms(wardId).then(setRooms);
+}, [wardId]);
 
   const fetchUsers = async () => {
     if (!wardId) return;
@@ -227,6 +233,37 @@ const WardUsersPage = () => {
                 </Button>
                 <Button variant="destructive" size="sm" onClick={() => handleDeleteUser(u)}><Trash2 className="h-4 w-4" /></Button>
               </TableCell>
+              <TableCell className="flex space-x-2">
+              <Select
+                onValueChange={async (roomId) => {
+                  const room = rooms.find(r => r.id === roomId);
+                  if (!room) return;
+                  try {
+                    await assignUserToRoom(u.id, room.id, room.name);
+
+                    setUsers(users.map(user => user.id === u.id ? { ...user, roomId: room.id, roomName: room.name } : user));
+                    toast({ title: "Đã gán phòng", description: `${u.userName} → ${room.name}` });
+                  } catch {
+                    toast({ title: "Lỗi", description: "Không thể gán phòng", variant: "destructive" });
+                  }
+                }}
+              >
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder={u.roomName || "Chọn phòng"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {rooms.map(r => (
+                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                  ))}
+                  <SelectItem value="none">--- Bỏ gán ---</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* <Button variant="destructive" size="sm" onClick={() => handleDeleteUser(u)}>
+                <Trash2 className="h-4 w-4" />
+              </Button> */}
+            </TableCell>
+
             </TableRow>
           ))}
         </TableBody>

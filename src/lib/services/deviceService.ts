@@ -379,3 +379,49 @@ export const getUsersWard = async (
     throw new Error(error.message || 'Failed to get users');
   }
 };
+export const getDevicesByUser = async (
+  wardId: string,
+  userId: string,
+  limitCount: number = 50
+): Promise<Device[]> => {
+  try {
+    const q = query(
+      collection(db, "devices"),
+      where("wardId", "==", wardId),
+      where("assignedTo", "==", userId),
+      limit(limitCount)
+    );
+
+    const snapshot = await getDocs(q);
+
+    const devices = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name || "Unknown",
+        type: data.type,
+        status: data.status || "inactive",
+        location: data.location || "",
+        wardId: data.wardId || "",
+        wardName: data.wardName || "",
+        vendor: data.vendor,
+        description: data.description,
+        specifications: data.specifications,
+        installationDate: data.installationDate?.toDate() || new Date(),
+        lastMaintenance: data.lastMaintenance?.toDate(),
+        nextMaintenance: data.nextMaintenance?.toDate(),
+        images: data.images || [],
+        createdBy: data.createdBy || "",
+        assignedTo: data.assignedTo,
+        assignedToName: data.assignedToName,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date(),
+      } as Device;
+    });
+
+    // Sort để mới nhất lên đầu
+    return devices.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  } catch (error: any) {
+    throw new Error(error.message || "Failed to get devices by user");
+  }
+};

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { AlertTriangle, Plus, Eye, Clock, CheckCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getDevices, type Device } from '@/lib/services/deviceService';
+import { getDevices,getDevicesByUser, type Device } from '@/lib/services/deviceService';
 import { getIncidentsByUser, createIncident, type Incident } from '@/lib/services/incidentService';
 import { useToast } from '@/hooks/use-toast';
 
@@ -33,16 +33,15 @@ const ReportIncidentPage = () => {
     severity: 'medium' as Incident['severity'],
     location: '',
   });
-
+  
   useEffect(() => {
     const fetchData = async () => {
-      if (!user?.wardId) return;
-      
+      if (!user?.wardId || !user?.id) return;
       try {
         setLoading(true);
         const [devicesData, incidentsData] = await Promise.all([
-          getDevices(user.wardId),
-          getIncidentsByUser(user.wardId, user.id) // ✅ chỉ lấy của user hiện tại
+          getDevicesByUser(user.wardId, user.id),   // chỉ lấy thiết bị của user
+          getIncidentsByUser(user.wardId, user.id), // chỉ lấy sự cố của user
         ]);
         setDevices(devicesData);
         setIncidents(incidentsData);
@@ -50,17 +49,16 @@ const ReportIncidentPage = () => {
         toast({
           title: "Lỗi tải dữ liệu",
           description: error.message || "Không thể tải dữ liệu",
-          variant: "destructive"
+          variant: "destructive",
         });
-        console.log("Current user wardId:", user.wardId);
-        console.log("Fetched users for this ward:",  error.message); // <-- Set vào select
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [user?.wardId, toast]);
+  }, [user?.wardId, user?.id, toast]);
+
 
   const handleSubmitIncident = async () => {
     if (!user) return;

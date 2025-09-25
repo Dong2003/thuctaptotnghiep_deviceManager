@@ -31,6 +31,7 @@ import Register from "./pages/Register";
 import MyDevicesPage from "./pages/user/MyDevicesPage";
 import ReportIncidentPage from "./pages/user/ReportIncidentPage";
 import ForgotPassword from "./pages/ForgotPassword";
+import WardRooms from "./pages/ward/WardRooms";
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -103,6 +104,7 @@ const App = () => (
             <Route path="/ward-requests" element={<ProtectedRoute><WardRequestsPage /></ProtectedRoute>} />
             <Route path="/ward-users" element={<ProtectedRoute><WardUsersPage /></ProtectedRoute>} />
             <Route path="/ward-incidents" element={<ProtectedRoute><WardIncidentsPage /></ProtectedRoute>} />
+             <Route path="/ward-rooms" element={<ProtectedRoute><WardRooms /></ProtectedRoute>} />
             
             {/* User Routes */}
             <Route path="/my-devices" element={<ProtectedRoute><MyDevicesPage /></ProtectedRoute>} />
