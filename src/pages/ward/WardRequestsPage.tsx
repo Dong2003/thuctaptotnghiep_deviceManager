@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { DeviceRequest, getDeviceRequests, updateDeviceRequest, getDeviceTypeDisplayName } from '@/lib/services/deviceRequestService';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDevices, Device } from '@/lib/services/deviceService';
-import { FIELD_META, getFieldsForType } from '@/components/SpecEditor';
+import { FIELD_META, getFieldsForType, getCpuOptionsByType, getGpuOptionsByType } from '@/components/SpecEditor';
 
 const WardRequestsPage = () => {
   const [requests, setRequests] = useState<DeviceRequest[]>([]);
@@ -452,12 +452,24 @@ const WardRequestsPage = () => {
                               .filter((k) => k !== 'vendor' && k !== 'description')
                               .map((k) => {
                                 const meta = FIELD_META[k];
-                                const val = (device.specifications as any)?.[k];
-                                if (!meta || val === undefined || val === '') return null;
+                                const rawVal = (device.specifications as any)?.[k];
+                                if (!meta || rawVal === undefined || rawVal === '') return null;
+                                const displayVal =
+                                  k === 'license'
+                                    ? (rawVal === 'licensed' ? 'Có' : rawVal === 'unlicensed' ? 'Không' : String(rawVal))
+                                    : k === 'cpu'
+                                    ? (rawVal === 'other'
+                                        ? ((device.specifications as any)?.cpu_other || 'Khác')
+                                        : (getCpuOptionsByType(device.type).find(o => o.value === rawVal)?.label || String(rawVal)))
+                                    : k === 'gpu'
+                                    ? (rawVal === 'other'
+                                        ? ((device.specifications as any)?.gpu_other || 'Khác')
+                                        : (getGpuOptionsByType(device.type).find(o => o.value === rawVal)?.label || String(rawVal)))
+                                    : String(rawVal);
                                 return (
                                   <div key={k} className="flex items-center">
                                     <span className="text-muted-foreground">{meta.label}:</span>
-                                    <span className="ml-1">{String(val)}</span>
+                                    <span className="ml-1">{displayVal}</span>
                                   </div>
                                 );
                               })}

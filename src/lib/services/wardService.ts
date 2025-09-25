@@ -45,6 +45,8 @@ export interface WardUser {
   joinedAt: Date;
   createdAt: Date;
   updatedAt: Date;
+  roomId?: string;
+  roomName?: string;
 }
 
 export interface CreateWardData {
