@@ -40,6 +40,7 @@ export interface Device {
     serialNumber?: string;
     ipAddress?: string;
     macAddress?: string;
+    vendor?: string;
   };
   installationDate: Date;
   lastMaintenance?: Date;
@@ -48,8 +49,11 @@ export interface Device {
   createdBy: string;
   assignedTo?: string;
   assignedToName?: string;
+  origin?: 'center' | 'ward';
   createdAt: Date;
   updatedAt: Date;
+  assignedRoomId?: string | null;
+  assignedRoomName?: string | null;
 }
 export interface CreateDeviceData {
   name: string;
@@ -70,9 +74,11 @@ export interface CreateDeviceData {
     serialNumber?: string;
     ipAddress?: string;
     macAddress?: string;
+    vendor?: string;
   };
   installationDate: Date;
   images?: string[];
+  origin?: 'center' | 'ward';
 }
 
 export interface UpdateDeviceData {
@@ -95,12 +101,16 @@ export interface UpdateDeviceData {
     serialNumber?: string;
     ipAddress?: string;
     macAddress?: string;
+    vendor?: string;
   };
   lastMaintenance?: Date | string;
   nextMaintenance?: Date | string;
   images?: string[];
   assignedTo?: string;
   assignedToName?: string;
+  origin?: 'center' | 'ward';
+  assignedRoomId?: string | null;
+  assignedRoomName?: string | null;
 }
 
 // Device CRUD operations
@@ -174,6 +184,7 @@ export const getDevices = async (
         createdBy: data.createdBy || "",
         assignedTo: data.assignedTo,
         assignedToName: data.assignedToName,
+        origin: data.origin,
         createdAt: data.createdAt?.toDate() || new Date(),
         updatedAt: data.updatedAt?.toDate() || new Date(),
       } as Device;
@@ -219,6 +230,7 @@ export const listenDevices = (
         createdBy: data.createdBy || "",
         assignedTo: data.assignedTo,
         assignedToName: data.assignedToName,
+        origin: data.origin,
         createdAt: data.createdAt?.toDate() || new Date(),
         updatedAt: data.updatedAt?.toDate() || new Date(),
       } as Device;
