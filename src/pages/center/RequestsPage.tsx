@@ -206,8 +206,12 @@ const RequestsPage = () => {
         await updateDoc(doc(db, 'devices', deviceId), {
           wardId: selectedRequest.wardId,
           wardName: ward.name,
-          assignedTo: selectedRequest.requestedBy,
-          assignedToName: ward.contactPerson || ward.name,
+          // Không gán assignedTo và assignedToName ngay lập tức
+          // Thiết bị sẽ được gán khi phường phân bổ cho người dùng cụ thể
+          assignedTo: null,
+          assignedToName: null,
+          assignedRoomId: null,
+          assignedRoomName: null,
           status: 'inactive', // Thiết bị sẽ ở trạng thái inactive cho đến khi ward nhận
           updatedAt: new Date(),
         });

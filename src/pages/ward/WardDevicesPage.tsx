@@ -479,10 +479,11 @@ const WardDevicesPage = () => {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm">Chi tiết</Button>
-                        </DialogTrigger>
+                      <div className="flex gap-2">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm">Chi tiết</Button>
+                          </DialogTrigger>
                         <DialogContent className="max-w-2xl">
                           <DialogHeader>
                             <DialogTitle>Thông tin thiết bị</DialogTitle>
@@ -558,6 +559,15 @@ const WardDevicesPage = () => {
                           </div>
                         </DialogContent>
                       </Dialog>
+                      {!d.assignedTo && (
+                        <Button 
+                          size="sm" 
+                          onClick={() => openAssignDialog(d)}
+                        >
+                          Gán thiết bị
+                        </Button>
+                      )}
+                    </div>
                     </TableCell>
                   </TableRow>
                 ))}
