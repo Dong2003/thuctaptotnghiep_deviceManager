@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CheckCircle, XCircle, Clock, FileText, Package } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, FileText, Package, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { DeviceRequest, getDeviceRequests, updateDeviceRequest, getDeviceTypeDisplayName, getWardById } from '@/lib/services/deviceRequestService';
 import { Ward } from '@/lib/services/wardService';
@@ -30,6 +30,15 @@ const RequestsPage = () => {
     deviceQuantities: {} as Record<string, number>, // Lưu số lượng cho mỗi thiết bị
     allocationNotes: '',
   });
+  
+  // Search and pagination states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedWard, setSelectedWard] = useState<string>('all');
+  const [selectedDeviceType, setSelectedDeviceType] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -37,6 +46,11 @@ const RequestsPage = () => {
     fetchRequests();
     fetchAvailableDevices();
   }, []);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedWard, selectedDeviceType, selectedStatus]);
 
   // Fetch requests and wards
   const fetchRequests = async () => {
@@ -294,6 +308,82 @@ const RequestsPage = () => {
     }
   };
 
+  // Filter and pagination functions
+  const getFilteredRequests = () => {
+    let filtered = requests;
+
+    // Search filter
+    if (searchTerm) {
+      filtered = filtered.filter(request => {
+        const ward = wardsMap[request.wardId];
+        const wardName = ward?.name || '';
+        const contactPerson = ward?.contactPerson || '';
+        const deviceType = getDeviceTypeDisplayName(request.deviceType);
+        const reason = request.reason || '';
+        
+        return (
+          wardName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          contactPerson.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          deviceType.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          reason.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      });
+    }
+
+    // Ward filter
+    if (selectedWard !== 'all') {
+      filtered = filtered.filter(request => request.wardId === selectedWard);
+    }
+
+    // Device type filter
+    if (selectedDeviceType !== 'all') {
+      filtered = filtered.filter(request => request.deviceType === selectedDeviceType);
+    }
+
+    // Status filter
+    if (selectedStatus !== 'all') {
+      filtered = filtered.filter(request => request.status === selectedStatus);
+    }
+
+    return filtered;
+  };
+
+  const getPaginatedRequests = () => {
+    const filtered = getFilteredRequests();
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filtered.slice(startIndex, endIndex);
+  };
+
+  const getTotalPages = () => {
+    const filtered = getFilteredRequests();
+    return Math.ceil(filtered.length / itemsPerPage);
+  };
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setSelectedWard('all');
+    setSelectedDeviceType('all');
+    setSelectedStatus('all');
+    setCurrentPage(1);
+  };
+
+  // Get unique values for filter options
+  const getUniqueWards = () => {
+    const wardIds = [...new Set(requests.map(r => r.wardId))];
+    return wardIds.map(id => ({ id, name: wardsMap[id]?.name || 'Không xác định' }));
+  };
+
+  const getUniqueDeviceTypes = () => {
+    const types = [...new Set(requests.map(r => r.deviceType))];
+    return types.map(type => ({ value: type, label: getDeviceTypeDisplayName(type) }));
+  };
+
+  const getUniqueStatuses = () => {
+    const statuses = [...new Set(requests.map(r => r.status))];
+    return statuses.map(status => ({ value: status, label: getStatusText(status) }));
+  };
+
 
   const toggleDeviceSelection = (deviceId: string) => {
     // Kiểm tra xem thiết bị có được cấp xuống phường nào không
@@ -414,10 +504,120 @@ const RequestsPage = () => {
         </Card>
       </div>
 
+      {/* Search and Filter Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Tìm kiếm và lọc
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* Search Input */}
+            <div className="lg:col-span-2">
+              <Label className="text-sm font-medium mb-2 block">Tìm kiếm</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Tìm theo phường, người liên hệ, loại thiết bị, lý do..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            {/* Ward Filter */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Phường/Xã</Label>
+              <Select value={selectedWard} onValueChange={setSelectedWard}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn phường/xã" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả phường/xã</SelectItem>
+                  {getUniqueWards().map(ward => (
+                    <SelectItem key={ward.id} value={ward.id}>{ward.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Device Type Filter */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Loại thiết bị</Label>
+              <Select value={selectedDeviceType} onValueChange={setSelectedDeviceType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn loại thiết bị" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả loại thiết bị</SelectItem>
+                  {getUniqueDeviceTypes().map(type => (
+                    <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Status Filter */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Trạng thái</Label>
+              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn trạng thái" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                  {getUniqueStatuses().map(status => (
+                    <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Filter Actions */}
+          <div className="flex items-center justify-between mt-4">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={resetFilters}>
+                <Filter className="h-4 w-4 mr-2" />
+                Xóa bộ lọc
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Hiển thị {getFilteredRequests().length} trong tổng số {requests.length} yêu cầu
+              </span>
+            </div>
+            
+            {/* Items per page */}
+            <div className="flex items-center gap-2">
+              <Label className="text-sm">Hiển thị:</Label>
+              <Select value={itemsPerPage.toString()} onValueChange={(value) => {
+                setItemsPerPage(Number(value));
+                setCurrentPage(1);
+              }}>
+                <SelectTrigger className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Requests Table */}
       <Card>
         <CardHeader>
           <CardTitle>Danh sách yêu cầu</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Trang {currentPage} / {getTotalPages()} - Hiển thị {getPaginatedRequests().length} yêu cầu
+          </p>
         </CardHeader>
         <CardContent>
           <Table>
@@ -433,7 +633,7 @@ const RequestsPage = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {requests.map(request => {
+              {getPaginatedRequests().map(request => {
                 const ward = wardsMap[request.wardId];
                 return (
                   <TableRow key={request.id}>
@@ -476,6 +676,64 @@ const RequestsPage = () => {
               })}
             </TableBody>
           </Table>
+          
+          {/* Pagination */}
+          {getTotalPages() > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-muted-foreground">
+                Hiển thị {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, getFilteredRequests().length)} trong tổng số {getFilteredRequests().length} yêu cầu
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Trước
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, getTotalPages()) }, (_, i) => {
+                    let pageNum;
+                    if (getTotalPages() <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= getTotalPages() - 2) {
+                      pageNum = getTotalPages() - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className="w-8 h-8 p-0"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
+                  disabled={currentPage === getTotalPages()}
+                >
+                  Sau
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

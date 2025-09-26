@@ -9,9 +9,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Eye, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  getIncidents, 
-  updateIncident, 
+import {
+  getApprovedIncidentsForCenter,
+  updateIncident,
   type Incident,
   getSeverityColor,
   getStatusColor
@@ -28,11 +28,11 @@ const IncidentsPage = () => {
 
   const { toast } = useToast();
 
-  // Fetch incidents
+  // Fetch incidents (only approved by ward)
   const fetchIncidents = async () => {
     setLoading(true);
     try {
-      const data = await getIncidents();
+      const data = await getApprovedIncidentsForCenter();
       setIncidents(data);
     } catch (error: any) {
       toast({ title: 'Lỗi', description: error.message, variant: 'destructive' });
@@ -88,7 +88,16 @@ const IncidentsPage = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Quản lý sự cố thiết bị</h1>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">Quản lý sự cố thiết bị</h1>
+          <p className="text-muted-foreground">Quản lý các sự cố đã được phường duyệt</p>
+        </div>
+        <Button onClick={fetchIncidents} variant="outline">
+          <Clock className="h-4 w-4 mr-2" />
+          Tải lại
+        </Button>
+      </div>
 
       {/* Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -106,7 +115,7 @@ const IncidentsPage = () => {
             <AlertTriangle className="h-4 w-4 text-destructive"/>
           </CardHeader>
           <CardContent className="text-2xl font-bold text-destructive">
-            {incidents.filter(i => i.status === 'reported' || i.status === 'investigating').length}
+            {incidents.filter(i => i.status === 'ward_approved' || i.status === 'investigating').length}
           </CardContent>
         </Card>
 
@@ -156,14 +165,14 @@ const IncidentsPage = () => {
                   </TableCell>
                   <TableCell>
                     <Badge className={getStatusColor(incident.status)}>{incident.status}</Badge>
-                    {(incident.status === 'reported' || incident.status === 'investigating' || incident.status === 'in_progress') && (
+                    {(incident.status === 'ward_approved' || incident.status === 'investigating' || incident.status === 'in_progress') && (
                       <Select
                         value={incident.status}
                         onValueChange={(v: Incident['status']) => handleUpdateStatus(incident, v)}
                       >
-                        <SelectTrigger className="w-32"><SelectValue/></SelectTrigger>
+                        <SelectTrigger className="w-40"><SelectValue/></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="reported">Đã báo cáo</SelectItem>
+                          <SelectItem value="ward_approved">Đã duyệt</SelectItem>
                           <SelectItem value="investigating">Đang điều tra</SelectItem>
                           <SelectItem value="in_progress">Đang xử lý</SelectItem>
                           <SelectItem value="resolved">Đã giải quyết</SelectItem>
@@ -178,7 +187,7 @@ const IncidentsPage = () => {
                       <Button size="sm" variant="outline" onClick={() => openDetailDialog(incident)}>
                         <Eye className="w-4 h-4"/>
                       </Button>
-                      {(incident.status === 'reported' || incident.status === 'in_progress') && (
+                      {(incident.status === 'ward_approved' || incident.status === 'investigating' || incident.status === 'in_progress') && (
                         <Button size="sm" onClick={() => openResolveDialog(incident)}>Giải quyết</Button>
                       )}
                     </div>

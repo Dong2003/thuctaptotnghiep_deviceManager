@@ -5,9 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { AlertTriangle, Eye, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getIncidents, updateIncident, getIncidentStats, type Incident } from '@/lib/services/incidentService';
+import { getIncidentsForWardApproval, getAllIncidentsForWard, updateIncident, getIncidentStats, approveIncidentByWard, rejectIncidentByWard, type Incident } from '@/lib/services/incidentService';
 import { getDevices } from '@/lib/services/deviceService';
 import { useToast } from '@/hooks/use-toast';
 
@@ -19,6 +20,9 @@ const WardIncidentsPage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [isProcessingDialogOpen, setIsProcessingDialogOpen] = useState(false);
+  const [processingAction, setProcessingAction] = useState<'approve' | 'reject'>('approve');
+  const [processingComment, setProcessingComment] = useState('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -28,7 +32,7 @@ const WardIncidentsPage = () => {
       try {
         setLoading(true);
         const [incidentsData, devicesData, statsData] = await Promise.all([
-          getIncidents(user.wardId),
+          getAllIncidentsForWard(user.wardId),
           getDevices(user.wardId),
           getIncidentStats(user.wardId)
         ]);
@@ -78,6 +82,60 @@ const WardIncidentsPage = () => {
     setIsDetailDialogOpen(true);
   };
 
+  const openProcessingDialog = (incident: Incident) => {
+    setSelectedIncident(incident);
+    setProcessingAction('approve');
+    setProcessingComment('');
+    setIsProcessingDialogOpen(true);
+  };
+
+  const handleProcessIncident = async () => {
+    if (!selectedIncident || !user) return;
+
+    try {
+      if (processingAction === 'approve') {
+        await approveIncidentByWard(
+          selectedIncident.id,
+          user.id,
+          user.displayName || user.email,
+          processingComment
+        );
+        toast({
+          title: "Thành công",
+          description: "Đã duyệt sự cố thành công",
+        });
+      } else {
+        await rejectIncidentByWard(
+          selectedIncident.id,
+          user.id,
+          user.displayName || user.email,
+          processingComment
+        );
+        toast({
+          title: "Thành công",
+          description: "Đã từ chối sự cố",
+        });
+      }
+
+      // Refresh data
+      const [incidentsData, statsData] = await Promise.all([
+        getAllIncidentsForWard(user.wardId),
+        getIncidentStats(user.wardId)
+      ]);
+      setIncidents(incidentsData);
+      setStats(statsData);
+
+      setIsProcessingDialogOpen(false);
+      setSelectedIncident(null);
+    } catch (error: any) {
+      toast({
+        title: "Lỗi",
+        description: error.message || "Không thể xử lý sự cố",
+        variant: "destructive"
+      });
+    }
+  };
+
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case 'low':
@@ -110,8 +168,14 @@ const WardIncidentsPage = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'open':
+      case 'pending_ward_approval':
+        return 'warning';
+      case 'ward_approved':
+        return 'default';
+      case 'ward_rejected':
         return 'destructive';
+      case 'investigating':
+        return 'secondary';
       case 'in_progress':
         return 'warning';
       case 'resolved':
@@ -125,8 +189,14 @@ const WardIncidentsPage = () => {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'open':
-        return 'Mở';
+      case 'pending_ward_approval':
+        return 'Chờ duyệt';
+      case 'ward_approved':
+        return 'Đã duyệt';
+      case 'ward_rejected':
+        return 'Bị từ chối';
+      case 'investigating':
+        return 'Đang điều tra';
       case 'in_progress':
         return 'Đang xử lý';
       case 'resolved':
@@ -138,8 +208,8 @@ const WardIncidentsPage = () => {
     }
   };
 
-  const openIncidents = incidents.filter(i => i.status === 'reported');
-  const inProgressIncidents = incidents.filter(i => i.status === 'investigating' || i.status === 'in_progress');
+  const pendingIncidents = incidents.filter(i => i.status === 'pending_ward_approval');
+  const inProgressIncidents = incidents.filter(i => i.status === 'ward_approved' || i.status === 'investigating' || i.status === 'in_progress');
   const resolvedIncidents = incidents.filter(i => i.status === 'resolved' || i.status === 'closed');
 
   if (loading) {
@@ -178,7 +248,7 @@ const WardIncidentsPage = () => {
             <XCircle className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-destructive">{stats?.byStatus?.reported || openIncidents.length}</div>
+            <div className="text-2xl font-bold text-destructive">{stats?.byStatus?.pending_ward_approval || pendingIncidents.length}</div>
           </CardContent>
         </Card>
 
@@ -261,21 +331,15 @@ const WardIncidentsPage = () => {
                         <Badge variant={getStatusColor(incident.status) as any}>
                           {getStatusText(incident.status)}
                         </Badge>
-                        {incident.status === 'reported' && (
-                          <Select
-                            value={incident.status}
-                            onValueChange={(value: Incident['status']) => 
-                              handleUpdateStatus(incident.id, value)
-                            }
+                        {incident.status === 'pending_ward_approval' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openProcessingDialog(incident)}
+                            className="w-full"
                           >
-                            <SelectTrigger className="w-32">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="open">Mở</SelectItem>
-                              <SelectItem value="in_progress">Đang xử lý</SelectItem>
-                            </SelectContent>
-                          </Select>
+                            Xử lý
+                          </Button>
                         )}
                       </div>
                     </TableCell>
@@ -370,6 +434,75 @@ const WardIncidentsPage = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDetailDialogOpen(false)}>
               Đóng
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Processing Dialog */}
+      <Dialog open={isProcessingDialogOpen} onOpenChange={setIsProcessingDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xử lý sự cố</DialogTitle>
+            <DialogDescription>
+              Chọn hành động và nhập lý do cho sự cố: {selectedIncident?.title}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Hành động</label>
+              <div className="flex space-x-4 mt-2">
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    value="approve"
+                    checked={processingAction === 'approve'}
+                    onChange={(e) => setProcessingAction(e.target.value as 'approve' | 'reject')}
+                  />
+                  <span className="text-sm">Duyệt sự cố</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    value="reject"
+                    checked={processingAction === 'reject'}
+                    onChange={(e) => setProcessingAction(e.target.value as 'approve' | 'reject')}
+                  />
+                  <span className="text-sm">Từ chối sự cố</span>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">
+                {processingAction === 'approve' ? 'Lý do duyệt' : 'Lý do từ chối'}
+              </label>
+              <Textarea
+                className="w-full mt-1"
+                rows={3}
+                value={processingComment}
+                onChange={(e) => setProcessingComment(e.target.value)}
+                placeholder={
+                  processingAction === 'approve'
+                    ? 'Nhập lý do duyệt sự cố...'
+                    : 'Nhập lý do từ chối sự cố...'
+                }
+                required
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsProcessingDialogOpen(false)}>
+              Hủy
+            </Button>
+            <Button
+              onClick={handleProcessIncident}
+              variant={processingAction === 'approve' ? 'default' : 'destructive'}
+              disabled={!processingComment.trim()}
+            >
+              {processingAction === 'approve' ? 'Duyệt' : 'Từ chối'}
             </Button>
           </DialogFooter>
         </DialogContent>

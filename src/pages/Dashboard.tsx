@@ -12,6 +12,7 @@ import {
   fetchDeviceRequests,
   fetchIncidentReports
 } from '@/lib/data';
+import { getApprovedIncidentsForCenter, getIncidentsForWardApproval, getIncidentsByUser } from '@/lib/services/incidentService';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -26,16 +27,31 @@ const Dashboard = () => {
     const loadData = async () => {
       if (!user) return;
 
-      const [allDevices, allWards, allRequests, allIncidents] = await Promise.all([
+      const [allDevices, allWards, allRequests] = await Promise.all([
         fetchDevices(),
         fetchWards(),
         fetchDeviceRequests(),
-        fetchIncidentReports(),
       ]);
 
       setDevices(allDevices);
       setWards(allWards);
       setDeviceRequests(allRequests);
+
+      // Load incidents based on user role
+      let allIncidents = [];
+      try {
+        if (user.role === 'center') {
+          allIncidents = await getApprovedIncidentsForCenter();
+        } else if (user.role === 'ward') {
+          allIncidents = await getIncidentsForWardApproval(user.wardId!);
+        } else if (user.role === 'user') {
+          allIncidents = await getIncidentsByUser(user.wardId!, user.id);
+        }
+      } catch (error) {
+        console.error('Error loading incidents:', error);
+        allIncidents = [];
+      }
+
       setIncidentReports(allIncidents);
 
       // --- Tính stats ---
@@ -47,7 +63,7 @@ const Dashboard = () => {
             availableDevices: allDevices.filter(d => d.status === 'inactive').length,
             totalWards: allWards.length,
             pendingRequests: allRequests.filter(r => r.status === 'pending').length,
-            openIncidents: allIncidents.filter(i => i.status === 'reported' || i.status === 'investigating' || i.status === 'in_progress').length,
+            openIncidents: allIncidents.filter(i => i.status === 'ward_approved' || i.status === 'investigating' || i.status === 'in_progress').length,
           };
           break;
         case 'ward':
@@ -57,6 +73,7 @@ const Dashboard = () => {
             devicesInUse: wardDevices.filter(d => d.status === 'active').length,
             availableDevices: wardDevices.filter(d => d.status === 'inactive').length,
             myRequests: allRequests.filter(r => r.wardId === user.wardId).length,
+            pendingIncidents: allIncidents.filter(i => i.status === 'pending_ward_approval').length,
           };
           break;
         case 'user':
@@ -64,7 +81,8 @@ const Dashboard = () => {
           computedStats = {
             myDevices: userDevices.length,
             workingDevices: userDevices.filter(d => d.status === 'active').length,
-            myIncidents: allIncidents.filter(i => i.reportedBy === user.id).length,
+            myIncidents: allIncidents.length,
+            pendingIncidents: allIncidents.filter(i => i.status === 'pending_ward_approval').length,
           };
           break;
         default:
@@ -167,20 +185,32 @@ const Dashboard = () => {
                       <p className="text-sm text-muted-foreground">{device?.name}</p>
                     </div>
                     <Badge
-                    variant={
-                      inc.status === "resolved"
-                        ? "default"
+                      variant={
+                        inc.status === "resolved" || inc.status === "closed"
+                          ? "default"
+                          : inc.status === "in_progress" || inc.status === "investigating"
+                          ? "secondary"
+                          : inc.status === "ward_approved"
+                          ? "default"
+                          : inc.status === "ward_rejected"
+                          ? "destructive"
+                          : "destructive"
+                      }
+                    >
+                      {inc.status === "resolved" || inc.status === "closed"
+                        ? "Đã giải quyết"
                         : inc.status === "in_progress"
-                        ? "secondary"
-                        : "destructive"
-                    }
-                  >
-                    {inc.status === "resolved"
-                      ? "Đã xử lý"
-                      : inc.status === "in_progress"
-                      ? "Đang xử lý"
-                      : "Chờ xác nhận"}
-                  </Badge>
+                        ? "Đang xử lý"
+                        : inc.status === "investigating"
+                        ? "Đang điều tra"
+                        : inc.status === "ward_approved"
+                        ? "Đã duyệt"
+                        : inc.status === "ward_rejected"
+                        ? "Bị từ chối"
+                        : inc.status === "pending_ward_approval"
+                        ? "Chờ duyệt"
+                        : "Không xác định"}
+                    </Badge>
                   </div>
                 );
               })}

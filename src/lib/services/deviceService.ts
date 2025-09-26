@@ -41,6 +41,7 @@ export interface Device {
     ipAddress?: string;
     macAddress?: string;
     vendor?: string;
+    windowsLicense?: 'licensed' | 'unlicensed' | 'unknown'; // Thêm trường riêng cho bản quyền Windows
   };
   installationDate: Date;
   lastMaintenance?: Date;
@@ -75,6 +76,7 @@ export interface CreateDeviceData {
     ipAddress?: string;
     macAddress?: string;
     vendor?: string;
+    windowsLicense?: 'licensed' | 'unlicensed' | 'unknown'; // Thêm trường riêng cho bản quyền Windows
   };
   installationDate: Date;
   images?: string[];
@@ -102,6 +104,7 @@ export interface UpdateDeviceData {
     ipAddress?: string;
     macAddress?: string;
     vendor?: string;
+    windowsLicense?: 'licensed' | 'unlicensed' | 'unknown'; // Thêm trường riêng cho bản quyền Windows
   };
   lastMaintenance?: Date | string;
   nextMaintenance?: Date | string;

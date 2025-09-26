@@ -49,6 +49,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           { path: '/ward-requests', label: 'Nhận thiết bị', icon: CheckCircle },
           { path: '/ward-users', label: 'Quản lý người dùng', icon: Users },
           { path: '/ward-incidents', label: 'Sự cố thiết bị', icon: AlertTriangle },
+          { path: '/ward-incident-approval', label: 'Duyệt báo cáo sự cố', icon: FileText },
         ];
       case 'user':
         return [

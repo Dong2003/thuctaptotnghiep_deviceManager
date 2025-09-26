@@ -148,8 +148,14 @@ const ReportIncidentPage = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'open':
+      case 'pending_ward_approval':
+        return 'warning';
+      case 'ward_approved':
+        return 'default';
+      case 'ward_rejected':
         return 'destructive';
+      case 'investigating':
+        return 'secondary';
       case 'in_progress':
         return 'warning';
       case 'resolved':
@@ -163,8 +169,14 @@ const ReportIncidentPage = () => {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'open':
-        return 'Chưa xử lý';
+      case 'pending_ward_approval':
+        return 'Chờ phường duyệt';
+      case 'ward_approved':
+        return 'Đã duyệt';
+      case 'ward_rejected':
+        return 'Bị từ chối';
+      case 'investigating':
+        return 'Đang điều tra';
       case 'in_progress':
         return 'Đang xử lý';
       case 'resolved':
@@ -178,8 +190,13 @@ const ReportIncidentPage = () => {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'open':
+      case 'pending_ward_approval':
+        return <Clock className="h-4 w-4" />;
+      case 'ward_approved':
+        return <CheckCircle className="h-4 w-4" />;
+      case 'ward_rejected':
         return <AlertTriangle className="h-4 w-4" />;
+      case 'investigating':
       case 'in_progress':
         return <Clock className="h-4 w-4" />;
       case 'resolved':
@@ -190,9 +207,10 @@ const ReportIncidentPage = () => {
     }
   };
 
-  const openIncidents = incidents.filter(i => i.status === 'reported');
-  const inProgressIncidents = incidents.filter(i => i.status === 'investigating' || i.status === 'in_progress');
+  const pendingIncidents = incidents.filter(i => i.status === 'pending_ward_approval');
+  const inProgressIncidents = incidents.filter(i => i.status === 'ward_approved' || i.status === 'investigating' || i.status === 'in_progress');
   const resolvedIncidents = incidents.filter(i => i.status === 'resolved' || i.status === 'closed');
+  const rejectedIncidents = incidents.filter(i => i.status === 'ward_rejected');
 
   if (loading) {
     return (
@@ -335,13 +353,13 @@ const ReportIncidentPage = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Chưa xử lý</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-destructive" />
+            <CardTitle className="text-sm font-medium">Chờ duyệt</CardTitle>
+            <Clock className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-destructive">{openIncidents.length}</div>
+            <div className="text-2xl font-bold text-yellow-600">{pendingIncidents.length}</div>
             <p className="text-xs text-muted-foreground">
-              Đang chờ xử lý
+              Chờ phường duyệt
             </p>
           </CardContent>
         </Card>
@@ -349,10 +367,10 @@ const ReportIncidentPage = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Đang xử lý</CardTitle>
-            <Clock className="h-4 w-4 text-warning" />
+            <CheckCircle className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-warning">{inProgressIncidents.length}</div>
+            <div className="text-2xl font-bold text-blue-600">{inProgressIncidents.length}</div>
             <p className="text-xs text-muted-foreground">
               Đang được khắc phục
             </p>
@@ -362,10 +380,10 @@ const ReportIncidentPage = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Đã giải quyết</CardTitle>
-            <CheckCircle className="h-4 w-4 text-success" />
+            <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-success">{resolvedIncidents.length}</div>
+            <div className="text-2xl font-bold text-green-600">{resolvedIncidents.length}</div>
             <p className="text-xs text-muted-foreground">
               Hoàn thành
             </p>
@@ -558,6 +576,37 @@ const ReportIncidentPage = () => {
                   <p className="text-sm">{selectedIncident.description}</p>
                 </div>
               </div>
+
+              {selectedIncident.status === 'ward_rejected' && selectedIncident.wardRejectionReason && (
+                <div>
+                  <h4 className="font-medium mb-2">Lý do từ chối:</h4>
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                    <p className="text-sm text-red-800">{selectedIncident.wardRejectionReason}</p>
+                    {selectedIncident.wardRejectedAt && (
+                      <p className="text-xs text-red-600 mt-2">
+                        Từ chối bởi: {selectedIncident.wardRejectedByName} - {new Date(selectedIncident.wardRejectedAt).toLocaleDateString('vi-VN')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {selectedIncident.status === 'ward_approved' && selectedIncident.wardApprovedAt && (
+                <div>
+                  <h4 className="font-medium mb-2">Thông tin duyệt:</h4>
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                    <p className="text-sm text-green-800">Sự cố đã được phường duyệt và chuyển lên trung tâm xử lý</p>
+                    {selectedIncident.wardApprovalComment && (
+                      <p className="text-sm text-green-700 mt-2">
+                        <strong>Bình luận:</strong> {selectedIncident.wardApprovalComment}
+                      </p>
+                    )}
+                    <p className="text-xs text-green-600 mt-2">
+                      Duyệt bởi: {selectedIncident.wardApprovedByName} - {new Date(selectedIncident.wardApprovedAt).toLocaleDateString('vi-VN')}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {selectedIncident.resolution && (
                 <div>

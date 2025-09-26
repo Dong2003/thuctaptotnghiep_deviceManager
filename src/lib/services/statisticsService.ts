@@ -1,7 +1,64 @@
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs, query, where, doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { Device } from "./deviceService";
 import { Ward } from "./wardService";
+
+// Helper function để kiểm tra bản quyền Windows
+const checkWindowsLicense = (device: Device): boolean => {
+  const os = device.specifications?.os || '';
+  const isWindows = os.toLowerCase().includes('windows');
+  
+  if (!isWindows) return false;
+  
+  // Ưu tiên trường windowsLicense hoặc license nếu có
+  if (device.specifications?.windowsLicense) {
+    return device.specifications.windowsLicense === 'licensed';
+  }
+  
+  // Kiểm tra trường license cũ (để tương thích ngược)
+  if ((device.specifications as any)?.license) {
+    return (device.specifications as any).license === 'licensed';
+  }
+  
+  // Fallback: Kiểm tra nhiều điều kiện để xác định bản quyền
+  const brand = device.specifications?.brand?.toLowerCase() || '';
+  const model = device.specifications?.model?.toLowerCase() || '';
+  const vendor = device.vendor?.toLowerCase() || '';
+  const description = device.description?.toLowerCase() || '';
+  
+  // Các từ khóa chỉ bản quyền hợp lệ
+  const licensedKeywords = [
+    'licensed', 'bản quyền', 'genuine', 'authentic', 'original',
+    'microsoft', 'oem', 'retail', 'volume', 'enterprise',
+    'professional', 'pro', 'business', 'education'
+  ];
+  
+  // Các từ khóa chỉ bản quyền không hợp lệ
+  const unlicensedKeywords = [
+    'crack', 'pirate', 'hack', 'unlicensed', 'trial', 'evaluation',
+    'test', 'demo', 'beta', 'preview', 'kms', 'activator'
+  ];
+  
+  const hasLicensedKeyword = licensedKeywords.some(keyword => 
+    brand.includes(keyword) || model.includes(keyword) || 
+    vendor.includes(keyword) || description.includes(keyword)
+  );
+  
+  const hasUnlicensedKeyword = unlicensedKeywords.some(keyword => 
+    brand.includes(keyword) || model.includes(keyword) || 
+    vendor.includes(keyword) || description.includes(keyword)
+  );
+  
+  // Logic xác định bản quyền
+  if (hasUnlicensedKeyword) {
+    return false;
+  } else if (hasLicensedKeyword) {
+    return true;
+  } else {
+    // Mặc định coi là chưa kích hoạt nếu không có thông tin rõ ràng
+    return false;
+  }
+};
 
 export interface DeviceStatistics {
   totalDevices: number;
@@ -16,6 +73,11 @@ export interface DeviceStatistics {
       maintenance: number;
       error: number;
     };
+    osBreakdown: Record<string, number>;
+    licenseBreakdown: {
+      licensed: number;
+      unlicensed: number;
+    };
   }>;
   devicesByType: Record<string, number>;
   overallStatusBreakdown: {
@@ -23,6 +85,11 @@ export interface DeviceStatistics {
     inactive: number;
     maintenance: number;
     error: number;
+  };
+  overallOsBreakdown: Record<string, number>;
+  overallLicenseBreakdown: {
+    licensed: number;
+    unlicensed: number;
   };
 }
 
@@ -36,6 +103,11 @@ export interface WardStatistics {
     inactive: number;
     maintenance: number;
     error: number;
+  };
+  osBreakdown: Record<string, number>;
+  licenseBreakdown: {
+    licensed: number;
+    unlicensed: number;
   };
   assignedDevices: number;
   unassignedDevices: number;
@@ -174,6 +246,32 @@ export const getDeviceStatistics = async (): Promise<DeviceStatistics> => {
         error: 0
       } as Record<string, number>);
 
+      // Thống kê hệ điều hành
+      const osBreakdown = devices.reduce((acc, device) => {
+        const os = device.specifications?.os || 'Unknown';
+        acc[os] = (acc[os] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      // Thống kê bản quyền Windows
+      const licenseBreakdown = devices.reduce((acc, device) => {
+        const os = device.specifications?.os || '';
+        const isWindows = os.toLowerCase().includes('windows');
+        
+        if (isWindows) {
+          const isLicensed = checkWindowsLicense(device);
+          if (isLicensed) {
+            acc.licensed = (acc.licensed || 0) + 1;
+          } else {
+            acc.unlicensed = (acc.unlicensed || 0) + 1;
+          }
+        }
+        return acc;
+      }, {
+        licensed: 0,
+        unlicensed: 0
+      } as Record<string, number>);
+
       return {
         wardId: wardData.wardId,
         wardName: wardData.wardName,
@@ -184,6 +282,11 @@ export const getDeviceStatistics = async (): Promise<DeviceStatistics> => {
           inactive: statusBreakdown.inactive || 0,
           maintenance: statusBreakdown.maintenance || 0,
           error: statusBreakdown.error || 0
+        },
+        osBreakdown,
+        licenseBreakdown: {
+          licensed: licenseBreakdown.licensed || 0,
+          unlicensed: licenseBreakdown.unlicensed || 0
         }
       };
     });
@@ -205,6 +308,32 @@ export const getDeviceStatistics = async (): Promise<DeviceStatistics> => {
       error: 0
     } as Record<string, number>);
 
+    // Thống kê tổng quan theo hệ điều hành
+    const overallOsBreakdown = devices.reduce((acc, device) => {
+      const os = device.specifications?.os || 'Unknown';
+      acc[os] = (acc[os] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Thống kê tổng quan theo bản quyền Windows
+    const overallLicenseBreakdown = devices.reduce((acc, device) => {
+      const os = device.specifications?.os || '';
+      const isWindows = os.toLowerCase().includes('windows');
+      
+      if (isWindows) {
+        const isLicensed = checkWindowsLicense(device);
+        if (isLicensed) {
+          acc.licensed = (acc.licensed || 0) + 1;
+        } else {
+          acc.unlicensed = (acc.unlicensed || 0) + 1;
+        }
+      }
+      return acc;
+    }, {
+      licensed: 0,
+      unlicensed: 0
+    } as Record<string, number>);
+
     return {
       totalDevices: devices.length,
       devicesByWard: wardStatistics,
@@ -214,6 +343,11 @@ export const getDeviceStatistics = async (): Promise<DeviceStatistics> => {
         inactive: overallStatusBreakdown.inactive || 0,
         maintenance: overallStatusBreakdown.maintenance || 0,
         error: overallStatusBreakdown.error || 0
+      },
+      overallOsBreakdown,
+      overallLicenseBreakdown: {
+        licensed: overallLicenseBreakdown.licensed || 0,
+        unlicensed: overallLicenseBreakdown.unlicensed || 0
       }
     };
   } catch (error: any) {
@@ -271,6 +405,32 @@ export const getWardStatistics = async (wardId: string): Promise<WardStatistics 
       error: 0
     } as Record<string, number>);
 
+    // Thống kê hệ điều hành
+    const osBreakdown = devices.reduce((acc, device) => {
+      const os = device.specifications?.os || 'Unknown';
+      acc[os] = (acc[os] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Thống kê bản quyền Windows
+    const licenseBreakdown = devices.reduce((acc, device) => {
+      const os = device.specifications?.os || '';
+      const isWindows = os.toLowerCase().includes('windows');
+      
+      if (isWindows) {
+        const isLicensed = checkWindowsLicense(device);
+        if (isLicensed) {
+          acc.licensed = (acc.licensed || 0) + 1;
+        } else {
+          acc.unlicensed = (acc.unlicensed || 0) + 1;
+        }
+      }
+      return acc;
+    }, {
+      licensed: 0,
+      unlicensed: 0
+    } as Record<string, number>);
+
     const assignedDevices = devices.filter(d => d.assignedTo).length;
     const unassignedDevices = devices.length - assignedDevices;
 
@@ -284,6 +444,11 @@ export const getWardStatistics = async (wardId: string): Promise<WardStatistics 
         inactive: statusBreakdown.inactive || 0,
         maintenance: statusBreakdown.maintenance || 0,
         error: statusBreakdown.error || 0
+      },
+      osBreakdown,
+      licenseBreakdown: {
+        licensed: licenseBreakdown.licensed || 0,
+        unlicensed: licenseBreakdown.unlicensed || 0
       },
       assignedDevices,
       unassignedDevices,
@@ -427,6 +592,245 @@ export const getExpiryStatistics = async (): Promise<ExpiryStatistics> => {
     };
   } catch (error: any) {
     throw new Error(error.message || 'Failed to get expiry statistics');
+  }
+};
+
+// Hàm để cập nhật thiết bị hiện có với trường windowsLicense
+export const updateDevicesWithLicenseField = async (): Promise<void> => {
+  try {
+    console.log("Đang cập nhật thiết bị với trường windowsLicense...");
+    
+    // Lấy tất cả thiết bị
+    const devicesSnapshot = await getDocs(collection(db, 'devices'));
+    const devices: Device[] = devicesSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name || "Unknown",
+        type: data.type || "other",
+        status: data.status || "inactive",
+        location: data.location || "",
+        wardId: data.wardId || "",
+        wardName: data.wardName || "",
+        vendor: data.vendor,
+        description: data.description,
+        specifications: data.specifications,
+        installationDate: data.installationDate?.toDate() || new Date(),
+        lastMaintenance: data.lastMaintenance?.toDate(),
+        nextMaintenance: data.nextMaintenance?.toDate(),
+        images: data.images || [],
+        createdBy: data.createdBy || "",
+        assignedTo: data.assignedTo,
+        assignedToName: data.assignedToName,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date(),
+      } as Device;
+    });
+
+    console.log(`Tìm thấy ${devices.length} thiết bị để cập nhật`);
+
+    // Cập nhật từng thiết bị
+    for (const device of devices) {
+      const os = device.specifications?.os || '';
+      const isWindows = os.toLowerCase().includes('windows');
+      
+      if (isWindows && !device.specifications?.windowsLicense) {
+        // Kiểm tra trường license cũ trước
+        let licenseStatus: 'licensed' | 'unlicensed' | 'unknown' = 'unknown';
+        
+        if ((device.specifications as any)?.license) {
+          licenseStatus = (device.specifications as any).license === 'licensed' ? 'licensed' : 'unlicensed';
+        } else {
+          // Xác định trạng thái bản quyền dựa trên logic hiện tại
+          const brand = device.specifications?.brand?.toLowerCase() || '';
+          const model = device.specifications?.model?.toLowerCase() || '';
+          const vendor = device.vendor?.toLowerCase() || '';
+          const description = device.description?.toLowerCase() || '';
+          
+          const licensedKeywords = [
+            'licensed', 'bản quyền', 'genuine', 'authentic', 'original',
+            'microsoft', 'oem', 'retail', 'volume', 'enterprise',
+            'professional', 'pro', 'business', 'education'
+          ];
+          
+          const unlicensedKeywords = [
+            'crack', 'pirate', 'hack', 'unlicensed', 'trial', 'evaluation',
+            'test', 'demo', 'beta', 'preview', 'kms', 'activator'
+          ];
+          
+          const hasLicensedKeyword = licensedKeywords.some(keyword => 
+            brand.includes(keyword) || model.includes(keyword) || 
+            vendor.includes(keyword) || description.includes(keyword)
+          );
+          
+          const hasUnlicensedKeyword = unlicensedKeywords.some(keyword => 
+            brand.includes(keyword) || model.includes(keyword) || 
+            vendor.includes(keyword) || description.includes(keyword)
+          );
+          
+          if (hasUnlicensedKeyword) {
+            licenseStatus = 'unlicensed';
+          } else if (hasLicensedKeyword) {
+            licenseStatus = 'licensed';
+          } else {
+            licenseStatus = 'unlicensed'; // Mặc định
+          }
+        }
+        
+        // Cập nhật thiết bị với trường windowsLicense
+        const deviceRef = doc(db, 'devices', device.id);
+        await updateDoc(deviceRef, {
+          'specifications.windowsLicense': licenseStatus,
+          updatedAt: new Date()
+        });
+        
+        console.log(`Đã cập nhật thiết bị ${device.name} với license: ${licenseStatus}`);
+      }
+    }
+    
+    console.log("Hoàn thành cập nhật thiết bị với trường windowsLicense");
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to update devices with license field');
+  }
+};
+
+// Hàm để tạo dữ liệu mẫu cho test (có thể xóa sau khi test xong)
+export const createSampleDevicesForTesting = async (): Promise<void> => {
+  try {
+    const sampleDevices = [
+      {
+        name: "PC Văn phòng 1",
+        type: "desktop",
+        status: "active",
+        location: "Phòng làm việc",
+        wardId: "ward1",
+        wardName: "Phường 1",
+        vendor: "Microsoft Licensed",
+        description: "Máy tính văn phòng có bản quyền Windows",
+        specifications: {
+          os: "Windows 11 Pro",
+          brand: "Microsoft Licensed",
+          model: "Dell OptiPlex 7090",
+          cpu: "Intel Core i5",
+          ram: "8GB",
+          storage: "256GB SSD",
+          windowsLicense: "licensed"
+        },
+        installationDate: new Date(),
+        createdBy: "admin",
+        assignedTo: null,
+        assignedToName: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        name: "Laptop Giám đốc",
+        type: "laptop", 
+        status: "active",
+        location: "Phòng giám đốc",
+        wardId: "ward1",
+        wardName: "Phường 1",
+        vendor: "HP Enterprise",
+        description: "Laptop cao cấp với Windows Enterprise",
+        specifications: {
+          os: "Windows 11 Enterprise",
+          brand: "HP Enterprise",
+          model: "EliteBook 850",
+          cpu: "Intel Core i7",
+          ram: "16GB",
+          storage: "512GB SSD",
+          windowsLicense: "licensed"
+        },
+        installationDate: new Date(),
+        createdBy: "admin",
+        assignedTo: "user1",
+        assignedToName: "Nguyễn Văn A",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        name: "PC Phòng IT",
+        type: "desktop",
+        status: "active", 
+        location: "Phòng IT",
+        wardId: "ward2",
+        wardName: "Phường 2",
+        vendor: "Dell OEM",
+        description: "Máy tính phòng IT với Windows OEM",
+        specifications: {
+          os: "Windows 10 Pro",
+          brand: "Dell OEM",
+          model: "OptiPlex 3080",
+          cpu: "Intel Core i3",
+          ram: "4GB",
+          storage: "128GB SSD",
+          windowsLicense: "licensed"
+        },
+        installationDate: new Date(),
+        createdBy: "admin",
+        assignedTo: null,
+        assignedToName: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        name: "PC Test",
+        type: "desktop",
+        status: "inactive",
+        location: "Kho",
+        wardId: "ward2", 
+        wardName: "Phường 2",
+        vendor: "Unknown",
+        description: "Máy tính test với Windows crack",
+        specifications: {
+          os: "Windows 10",
+          brand: "Crack Version",
+          model: "Generic PC",
+          cpu: "Intel Core i3",
+          ram: "4GB",
+          storage: "500GB HDD",
+          windowsLicense: "unlicensed"
+        },
+        installationDate: new Date(),
+        createdBy: "admin",
+        assignedTo: null,
+        assignedToName: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        name: "Laptop Nhân viên",
+        type: "laptop",
+        status: "active",
+        location: "Bàn làm việc",
+        wardId: "ward3",
+        wardName: "Phường 3", 
+        vendor: "Lenovo Business",
+        description: "Laptop nhân viên với Windows Business",
+        specifications: {
+          os: "Windows 11 Business",
+          brand: "Lenovo Business",
+          model: "ThinkPad E15",
+          cpu: "AMD Ryzen 5",
+          ram: "8GB",
+          storage: "256GB SSD",
+          windowsLicense: "licensed"
+        },
+        installationDate: new Date(),
+        createdBy: "admin",
+        assignedTo: "user2",
+        assignedToName: "Trần Thị B",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+    ];
+
+    console.log("Tạo dữ liệu mẫu cho test...");
+    // Note: Trong thực tế, bạn sẽ sử dụng addDoc để thêm vào Firestore
+    // await Promise.all(sampleDevices.map(device => addDoc(collection(db, 'devices'), device)));
+    console.log("Dữ liệu mẫu đã được tạo:", sampleDevices);
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to create sample devices');
   }
 };
 

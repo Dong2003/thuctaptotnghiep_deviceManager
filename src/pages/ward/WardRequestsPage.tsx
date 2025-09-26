@@ -455,7 +455,7 @@ const WardRequestsPage = () => {
                                 const rawVal = (device.specifications as any)?.[k];
                                 if (!meta || rawVal === undefined || rawVal === '') return null;
                                 const displayVal =
-                                  k === 'license'
+                                  k === 'license' || k === 'windowsLicense'
                                     ? (rawVal === 'licensed' ? 'Có' : rawVal === 'unlicensed' ? 'Không' : String(rawVal))
                                     : k === 'cpu'
                                     ? (rawVal === 'other'
