@@ -10,7 +10,9 @@ import {
   where,
   orderBy,
   limit,
-  onSnapshot, Unsubscribe,
+  onSnapshot, 
+  Unsubscribe,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../firebase";
 
@@ -36,6 +38,17 @@ export interface DeviceRequest {
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
+  // Notification fields
+  hasNewUpdate?: boolean;
+  lastUpdateBy?: string;
+  lastUpdateByName?: string;
+  lastUpdateByRole?: string; // Thêm role để hook có thể kiểm tra
+  lastUpdateAt?: Date;
+  // Soft delete fields
+  isDeleted?: boolean;
+  deletedBy?: string;
+  deletedByRole?: string;
+  deletedAt?: Date;
 }
 
 export interface WardData {
@@ -68,7 +81,7 @@ export interface CreateDeviceRequestData {
 }
 
 export interface UpdateDeviceRequestData {
-  status?: 'approved' | 'rejected' | 'completed' | 'delivering' | 'received';
+  status?: 'pending' | 'approved' | 'rejected' | 'completed' | 'delivering' | 'received';
   approvedBy?: string;
   approvedAt?: Date;
   allocatedBy?: string;
@@ -119,7 +132,8 @@ export const getDeviceTypeDisplayName = (deviceType: string) => {
 // ------------------ CRUD DEVICE REQUEST ------------------ //
 export const createDeviceRequest = async (
   data: CreateDeviceRequestData,
-  requestedBy: string
+  requestedBy: string,
+  requestedByName: string
 ): Promise<string> => {
   try {
     const requestData = {
@@ -128,6 +142,11 @@ export const createDeviceRequest = async (
       status: 'pending' as const,
       createdAt: new Date(),
       updatedAt: new Date(),
+      hasNewUpdate: true, // Trung tâm sẽ thấy thông báo mới khi phường tạo request
+      lastUpdateBy: requestedBy,
+      lastUpdateByName: requestedByName,
+      lastUpdateByRole: 'ward',
+      lastUpdateAt: new Date()
     };
     const docRef = await addDoc(collection(db, 'deviceRequests'), requestData);
     return docRef.id;
@@ -149,6 +168,12 @@ export const getDeviceRequest = async (requestId: string): Promise<DeviceRequest
         approvedAt: data.approvedAt?.toDate(),
         createdAt: data.createdAt?.toDate() || new Date(),
         updatedAt: data.updatedAt?.toDate() || new Date(),
+        // Notification fields
+        hasNewUpdate: data.hasNewUpdate || false,
+        lastUpdateBy: data.lastUpdateBy || undefined,
+        lastUpdateByName: data.lastUpdateByName || undefined,
+        lastUpdateByRole: data.lastUpdateByRole || undefined,
+        lastUpdateAt: data.lastUpdateAt?.toDate(),
       } as DeviceRequest;
     }
     return null;
@@ -188,6 +213,12 @@ export const getDeviceRequests = async (
         receivedAt: data.receivedAt?.toDate(),
         createdAt: data.createdAt?.toDate() || new Date(),
         updatedAt: data.updatedAt?.toDate() || new Date(),
+        // Notification fields
+        hasNewUpdate: data.hasNewUpdate || false,
+        lastUpdateBy: data.lastUpdateBy || undefined,
+        lastUpdateByName: data.lastUpdateByName || undefined,
+        lastUpdateByRole: data.lastUpdateByRole || undefined,
+        lastUpdateAt: data.lastUpdateAt?.toDate(),
       } as DeviceRequest;
     });
 
@@ -200,7 +231,8 @@ export const getDeviceRequests = async (
 
 export const updateDeviceRequest = async (
   requestId: string,
-  data: UpdateDeviceRequestData
+  data: UpdateDeviceRequestData,
+  updatedBy?: { id: string; name: string; role: 'center' | 'ward' | 'user' }
 ): Promise<void> => {
   try {
     const requestRef = doc(db, 'deviceRequests', requestId);
@@ -222,17 +254,109 @@ export const updateDeviceRequest = async (
       updateData.receivedAt = new Date();
     }
 
+    // Đánh dấu có cập nhật mới khi có bất kỳ ai cập nhật
+    if (data.status) {
+      updateData.hasNewUpdate = true;
+      updateData.lastUpdateBy = updatedBy?.id;
+      updateData.lastUpdateByName = updatedBy?.name;
+      updateData.lastUpdateByRole = updatedBy?.role;
+      updateData.lastUpdateAt = new Date();
+      
+      console.log("🔔 DeviceRequest Update Debug:", {
+        requestId,
+        status: data.status,
+        updatedBy: updatedBy ? { id: updatedBy.id, name: updatedBy.name, role: updatedBy.role } : null,
+        hasNewUpdate: true,
+        lastUpdateByRole: updatedBy?.role
+      });
+    }
+
     await updateDoc(requestRef, updateData);
   } catch (error: any) {
     throw new Error(error.message || 'Failed to update device request');
   }
 };
 
-export const deleteDeviceRequest = async (requestId: string): Promise<void> => {
+// Đánh dấu đã xem cập nhật mới của yêu cầu thiết bị
+// Function để reset tất cả hasNewUpdate về false (dùng một lần để fix data cũ)
+export const resetAllDeviceRequestNotifications = async (): Promise<void> => {
   try {
+    console.log('Resetting all device request notifications...');
+    const q = query(collection(db, 'deviceRequests'));
+    const querySnapshot = await getDocs(q);
+    
+    const batch = writeBatch(db);
+    querySnapshot.docs.forEach((doc) => {
+      batch.update(doc.ref, { 
+        hasNewUpdate: false,
+        lastUpdateByRole: null, // Reset về null để tránh nhầm lẫn
+        lastUpdateBy: null,
+        lastUpdateByName: null,
+        lastUpdateAt: null
+      });
+    });
+    
+    await batch.commit();
+    console.log(`Reset ${querySnapshot.docs.length} device requests`);
+  } catch (error: any) {
+    console.error('Error resetting device request notifications:', error);
+    throw new Error(error.message || 'Failed to reset notifications');
+  }
+};
+
+export const markDeviceRequestUpdateAsViewed = async (requestId: string): Promise<void> => {
+  try {
+    const requestRef = doc(db, 'deviceRequests', requestId);
+    await updateDoc(requestRef, { hasNewUpdate: false });
+  } catch (error: any) {
+    console.error('Error marking device request update as viewed:', error);
+  }
+};
+
+export const deleteDeviceRequest = async (requestId: string, currentUserId: string, currentUserRole: string): Promise<void> => {
+  try {
+    // Kiểm tra quyền xóa
+    const requestDoc = await getDoc(doc(db, 'deviceRequests', requestId));
+    if (!requestDoc.exists()) {
+      throw new Error('Request not found');
+    }
+    
+    const requestData = requestDoc.data();
+    
+    // Chỉ trung tâm mới có quyền xóa
+    const canDelete = currentUserRole === 'center';
+    
+    if (!canDelete) {
+      throw new Error('Bạn không có quyền xóa request này');
+    }
+    
+    // Hard delete - xóa thật khỏi database
     await deleteDoc(doc(db, 'deviceRequests', requestId));
   } catch (error: any) {
     throw new Error(error.message || 'Failed to delete device request');
+  }
+};
+
+// Function để fix tất cả requests hiện có (thêm isDeleted: false)
+export const fixExistingDeviceRequests = async (): Promise<void> => {
+  try {
+    console.log('🔧 Fixing existing device requests...');
+    const q = query(collection(db, 'deviceRequests'));
+    const querySnapshot = await getDocs(q);
+    
+    const batch = writeBatch(db);
+    querySnapshot.docs.forEach((doc) => {
+      const data = doc.data();
+      if (data.isDeleted === undefined) {
+        batch.update(doc.ref, { isDeleted: false });
+      }
+    });
+    
+    await batch.commit();
+    console.log(`✅ Fixed ${querySnapshot.docs.length} device requests`);
+  } catch (error: any) {
+    console.error('❌ Error fixing device requests:', error);
+    throw new Error(error.message || 'Failed to fix device requests');
   }
 };
 
@@ -262,10 +386,10 @@ export const getDeviceRequestsRealtime = (
   wardId: string,
   callback: (requests: DeviceRequest[]) => void
 ): Unsubscribe => {
+  // Sử dụng query đơn giản không có orderBy để tránh lỗi index
   const q = query(
     collection(db, "deviceRequests"),
-    where("wardId", "==", wardId),
-    orderBy("createdAt", "desc")
+    where("wardId", "==", wardId)
   );
 
   const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -277,8 +401,16 @@ export const getDeviceRequestsRealtime = (
         approvedAt: data.approvedAt?.toDate?.() || undefined,
         createdAt: data.createdAt?.toDate?.() || new Date(),
         updatedAt: data.updatedAt?.toDate?.() || new Date(),
+        // Notification fields
+        hasNewUpdate: data.hasNewUpdate || false,
+        lastUpdateBy: data.lastUpdateBy || undefined,
+        lastUpdateByName: data.lastUpdateByName || undefined,
+        lastUpdateAt: data.lastUpdateAt?.toDate?.() || undefined,
       } as DeviceRequest;
     });
+    
+    // Sort by createdAt descending trong JavaScript thay vì Firestore
+    list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     callback(list);
   });
 

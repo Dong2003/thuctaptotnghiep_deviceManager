@@ -15,6 +15,8 @@ import {
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage } from "../firebase";
+import { processIncidentImages } from "../storageUtils";
+import { convertFilesToBase64, compressBase64Image } from "../imageUtils";
 
 export interface Incident {
   id: string;
@@ -41,6 +43,12 @@ export interface Incident {
   createdAt: Date;
   updatedAt: Date;
   resolvedAt?: Date;
+  // Notification fields
+  hasNewUpdate?: boolean;
+  lastUpdateBy?: string;
+  lastUpdateByName?: string;
+  lastUpdateByRole?: string; // Thêm role để hook có thể kiểm tra
+  lastUpdateAt?: Date;
   // Workflow fields
   wardApprovedBy?: string;
   wardApprovedByName?: string;
@@ -102,18 +110,41 @@ export const createIncident = async (
   reportedByName: string
 ): Promise<string> => {
   try {
+    console.log('Creating incident with data:', {
+      title: data.title,
+      location: data.location,
+      wardId: data.wardId,
+      reportedBy,
+      reportedByName,
+      imagesCount: data.images?.length || 0
+    });
+
     let imageUrls: string[] = [];
     let attachmentUrls: string[] = [];
     
     // Upload images if provided
     if (data.images && data.images.length > 0) {
-      imageUrls = await Promise.all(
-        data.images.map(async (file) => {
-          const imageRef = ref(storage, `incidents/images/${Date.now()}_${file.name}`);
-          const snapshot = await uploadBytes(imageRef, file);
-          return await getDownloadURL(snapshot.ref);
-        })
-      );
+      console.log('Images detected, converting to base64 for storage...');
+      try {
+        console.log('Converting', data.images.length, 'files to base64...');
+        const base64Images = await convertFilesToBase64(data.images);
+        console.log('Base64 conversion completed, compressing...');
+        
+        imageUrls = await Promise.all(
+          base64Images.map(async (base64, index) => {
+            console.log(`Compressing image ${index + 1}...`);
+            // Compress if too large
+            const compressed = await compressBase64Image(base64, 500); // 500KB max
+            console.log(`Image ${index + 1} compressed successfully`);
+            return compressed;
+          })
+        );
+        console.log('All images converted to base64 successfully:', imageUrls.length);
+      } catch (base64Error) {
+        console.error('Base64 conversion failed:', base64Error);
+        console.log('Continuing without images due to conversion failure');
+        imageUrls = [];
+      }
     }
     
     // Upload attachments if provided
@@ -136,11 +167,15 @@ export const createIncident = async (
       reportedByName,
       createdAt: new Date(),
       updatedAt: new Date(),
+      hasNewUpdate: false, // Đảm bảo không có thông báo mới khi tạo
     };
     
+    console.log('Saving incident to Firestore:', incidentData);
     const docRef = await addDoc(collection(db, 'incidents'), incidentData);
+    console.log('Incident created successfully with ID:', docRef.id);
     return docRef.id;
   } catch (error: any) {
+    console.error('Error creating incident:', error);
     throw new Error(error.message || 'Failed to create incident');
   }
 };
@@ -152,15 +187,49 @@ export const getIncident = async (incidentId: string): Promise<Incident | null> 
     
     if (docSnap.exists()) {
       const data = docSnap.data();
-      return {
+      const incident = {
         id: docSnap.id,
-        ...data,
-        estimatedResolution: data.estimatedResolution?.toDate(),
-        actualResolution: data.actualResolution?.toDate(),
-        createdAt: data.createdAt?.toDate() || new Date(),
-        updatedAt: data.updatedAt?.toDate() || new Date(),
-        resolvedAt: data.resolvedAt?.toDate(),
+        title: data.title || "",
+        description: data.description || "",
+        type: data.type || "other",
+        severity: data.severity || "medium",
+        wardId: data.wardId || "",
+        wardName: data.wardName || "",
+        reportedBy: data.reportedBy || "",
+        reportedByName: data.reportedByName || "",
+        status: data.status || "pending_ward_approval",
+        location: data.location || "",
+        deviceId: data.deviceId || undefined,
+        deviceName: data.deviceName || undefined,
+        assignedTo: data.assignedTo || undefined,
+        assignedToName: data.assignedToName || undefined,
+        priority: data.priority || "medium",
+        estimatedResolution: (data.estimatedResolution as Timestamp)?.toDate(),
+        actualResolution: (data.actualResolution as Timestamp)?.toDate(),
+        resolution: data.resolution || undefined,
+        images: await processIncidentImages(data.images || []),
+        attachments: data.attachments || [],
+        createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+        updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+        resolvedAt: (data.resolvedAt as Timestamp)?.toDate(),
+        // Notification fields
+        hasNewUpdate: data.hasNewUpdate || false,
+        lastUpdateBy: data.lastUpdateBy || undefined,
+        lastUpdateByName: data.lastUpdateByName || undefined,
+        lastUpdateByRole: data.lastUpdateByRole || undefined,
+        lastUpdateAt: (data.lastUpdateAt as Timestamp)?.toDate(),
+        // Workflow fields
+        wardApprovedBy: data.wardApprovedBy || undefined,
+        wardApprovedByName: data.wardApprovedByName || undefined,
+        wardApprovedAt: (data.wardApprovedAt as Timestamp)?.toDate(),
+        wardApprovalComment: data.wardApprovalComment || undefined,
+        wardRejectionReason: data.wardRejectionReason || undefined,
+        wardRejectedBy: data.wardRejectedBy || undefined,
+        wardRejectedByName: data.wardRejectedByName || undefined,
+        wardRejectedAt: (data.wardRejectedAt as Timestamp)?.toDate(),
       } as Incident;
+      
+      return incident;
     }
     return null;
   } catch (error: any) {
@@ -180,18 +249,50 @@ export const getIncidents = async (
     const q = query(collection(db, 'incidents'), orderBy('createdAt', 'desc'));
     
     const querySnapshot = await getDocs(q);
-    let incidents = querySnapshot.docs.map(doc => {
+    let incidents = await Promise.all(querySnapshot.docs.map(async doc => {
       const data = doc.data();
       return {
         id: doc.id,
-        ...data,
-        estimatedResolution: data.estimatedResolution?.toDate(),
-        actualResolution: data.actualResolution?.toDate(),
-        createdAt: data.createdAt?.toDate() || new Date(),
-        updatedAt: data.updatedAt?.toDate() || new Date(),
-        resolvedAt: data.resolvedAt?.toDate(),
+        title: data.title || "",
+        description: data.description || "",
+        type: data.type || "other",
+        severity: data.severity || "medium",
+        wardId: data.wardId || "",
+        wardName: data.wardName || "",
+        reportedBy: data.reportedBy || "",
+        reportedByName: data.reportedByName || "",
+        status: data.status || "pending_ward_approval",
+        location: data.location || "",
+        deviceId: data.deviceId || undefined,
+        deviceName: data.deviceName || undefined,
+        assignedTo: data.assignedTo || undefined,
+        assignedToName: data.assignedToName || undefined,
+        priority: data.priority || "medium",
+        estimatedResolution: (data.estimatedResolution as Timestamp)?.toDate(),
+        actualResolution: (data.actualResolution as Timestamp)?.toDate(),
+        resolution: data.resolution || undefined,
+        images: await processIncidentImages(data.images || []),
+        attachments: data.attachments || [],
+        createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+        updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+        resolvedAt: (data.resolvedAt as Timestamp)?.toDate(),
+        // Notification fields
+        hasNewUpdate: data.hasNewUpdate || false,
+        lastUpdateBy: data.lastUpdateBy || undefined,
+        lastUpdateByName: data.lastUpdateByName || undefined,
+        lastUpdateByRole: data.lastUpdateByRole || undefined,
+        lastUpdateAt: (data.lastUpdateAt as Timestamp)?.toDate(),
+        // Workflow fields
+        wardApprovedBy: data.wardApprovedBy || undefined,
+        wardApprovedByName: data.wardApprovedByName || undefined,
+        wardApprovedAt: (data.wardApprovedAt as Timestamp)?.toDate(),
+        wardApprovalComment: data.wardApprovalComment || undefined,
+        wardRejectionReason: data.wardRejectionReason || undefined,
+        wardRejectedBy: data.wardRejectedBy || undefined,
+        wardRejectedByName: data.wardRejectedByName || undefined,
+        wardRejectedAt: (data.wardRejectedAt as Timestamp)?.toDate(),
       } as Incident;
-    });
+    }));
 
     // Apply filters trong memory
     if (wardId) {
@@ -217,7 +318,11 @@ export const getIncidents = async (
   }
 };
 
-export const updateIncident = async (incidentId: string, data: UpdateIncidentData): Promise<void> => {
+export const updateIncident = async (
+  incidentId: string, 
+  data: UpdateIncidentData, 
+  updatedBy?: { id: string; name: string; role: 'center' | 'ward' | 'user' }
+): Promise<void> => {
   try {
     const incidentRef = doc(db, 'incidents', incidentId);
     const updateData: any = {
@@ -255,9 +360,31 @@ export const updateIncident = async (incidentId: string, data: UpdateIncidentDat
       updateData.actualResolution = new Date();
     }
     
+    // Đánh dấu có cập nhật mới chỉ khi trung tâm cập nhật trạng thái
+    if (updatedBy?.role === 'center' && data.status) {
+      updateData.hasNewUpdate = true;
+      updateData.lastUpdateBy = updatedBy.id;
+      updateData.lastUpdateByName = updatedBy.name;
+      updateData.lastUpdateByRole = updatedBy.role;
+      updateData.lastUpdateAt = new Date();
+    } else {
+      updateData.hasNewUpdate = false;
+      updateData.lastUpdateByRole = updatedBy?.role;
+    }
+
     await updateDoc(incidentRef, updateData);
   } catch (error: any) {
     throw new Error(error.message || 'Failed to update incident');
+  }
+};
+
+// Đánh dấu đã xem cập nhật mới của sự cố
+export const markIncidentUpdateAsViewed = async (incidentId: string): Promise<void> => {
+  try {
+    const incidentRef = doc(db, 'incidents', incidentId);
+    await updateDoc(incidentRef, { hasNewUpdate: false });
+  } catch (error: any) {
+    console.error('Error marking incident update as viewed:', error);
   }
 };
 
@@ -408,7 +535,7 @@ export const getIncidentsByUser = async (
     const querySnapshot = await getDocs(q);
 
     // Filter và sort trong memory
-    const incidents = querySnapshot.docs.map((doc) => {
+    const incidents = await Promise.all(querySnapshot.docs.map(async (doc) => {
       const data = doc.data();
 
       return {
@@ -431,11 +558,17 @@ export const getIncidentsByUser = async (
         estimatedResolution: (data.estimatedResolution as Timestamp)?.toDate(),
         actualResolution: (data.actualResolution as Timestamp)?.toDate(),
         resolution: data.resolution || undefined,
-        images: data.images || [],
+        images: await processIncidentImages(data.images || []),
         attachments: data.attachments || [],
         createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
         updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
         resolvedAt: (data.resolvedAt as Timestamp)?.toDate(),
+        // Notification fields
+        hasNewUpdate: data.hasNewUpdate || false,
+        lastUpdateBy: data.lastUpdateBy || undefined,
+        lastUpdateByName: data.lastUpdateByName || undefined,
+        lastUpdateByRole: data.lastUpdateByRole || undefined,
+        lastUpdateAt: (data.lastUpdateAt as Timestamp)?.toDate(),
         // Workflow fields
         wardApprovedBy: data.wardApprovedBy || undefined,
         wardApprovedByName: data.wardApprovedByName || undefined,
@@ -446,7 +579,7 @@ export const getIncidentsByUser = async (
         wardRejectedByName: data.wardRejectedByName || undefined,
         wardRejectedAt: (data.wardRejectedAt as Timestamp)?.toDate(),
       } as Incident;
-    });
+    }));
 
     // Filter theo wardId và sort theo createdAt
     return incidents
@@ -510,20 +643,50 @@ export const getIncidentsForWardApproval = async (wardId: string): Promise<Incid
     );
     
     const querySnapshot = await getDocs(q);
-    const incidents = querySnapshot.docs.map(doc => {
+    const incidents = await Promise.all(querySnapshot.docs.map(async doc => {
       const data = doc.data();
       return {
         id: doc.id,
-        ...data,
-        estimatedResolution: data.estimatedResolution?.toDate(),
-        actualResolution: data.actualResolution?.toDate(),
-        createdAt: data.createdAt?.toDate() || new Date(),
-        updatedAt: data.updatedAt?.toDate() || new Date(),
-        resolvedAt: data.resolvedAt?.toDate(),
-        wardApprovedAt: data.wardApprovedAt?.toDate(),
-        wardRejectedAt: data.wardRejectedAt?.toDate(),
+        title: data.title || "",
+        description: data.description || "",
+        type: data.type || "other",
+        severity: data.severity || "medium",
+        wardId: data.wardId || "",
+        wardName: data.wardName || "",
+        reportedBy: data.reportedBy || "",
+        reportedByName: data.reportedByName || "",
+        status: data.status || "pending_ward_approval",
+        location: data.location || "",
+        deviceId: data.deviceId || undefined,
+        deviceName: data.deviceName || undefined,
+        assignedTo: data.assignedTo || undefined,
+        assignedToName: data.assignedToName || undefined,
+        priority: data.priority || "medium",
+        estimatedResolution: (data.estimatedResolution as Timestamp)?.toDate(),
+        actualResolution: (data.actualResolution as Timestamp)?.toDate(),
+        resolution: data.resolution || undefined,
+        images: await processIncidentImages(data.images || []),
+        attachments: data.attachments || [],
+        createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+        updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+        resolvedAt: (data.resolvedAt as Timestamp)?.toDate(),
+        // Notification fields
+        hasNewUpdate: data.hasNewUpdate || false,
+        lastUpdateBy: data.lastUpdateBy || undefined,
+        lastUpdateByName: data.lastUpdateByName || undefined,
+        lastUpdateByRole: data.lastUpdateByRole || undefined,
+        lastUpdateAt: (data.lastUpdateAt as Timestamp)?.toDate(),
+        // Workflow fields
+        wardApprovedBy: data.wardApprovedBy || undefined,
+        wardApprovedByName: data.wardApprovedByName || undefined,
+        wardApprovedAt: (data.wardApprovedAt as Timestamp)?.toDate(),
+        wardApprovalComment: data.wardApprovalComment || undefined,
+        wardRejectionReason: data.wardRejectionReason || undefined,
+        wardRejectedBy: data.wardRejectedBy || undefined,
+        wardRejectedByName: data.wardRejectedByName || undefined,
+        wardRejectedAt: (data.wardRejectedAt as Timestamp)?.toDate(),
       } as Incident;
-    });
+    }));
 
     // Filter theo status và sort trong memory
     return incidents
@@ -544,20 +707,50 @@ export const getApprovedIncidentsForCenter = async (): Promise<Incident[]> => {
     );
     
     const querySnapshot = await getDocs(q);
-    const incidents = querySnapshot.docs.map(doc => {
+    const incidents = await Promise.all(querySnapshot.docs.map(async doc => {
       const data = doc.data();
       return {
         id: doc.id,
-        ...data,
-        estimatedResolution: data.estimatedResolution?.toDate(),
-        actualResolution: data.actualResolution?.toDate(),
-        createdAt: data.createdAt?.toDate() || new Date(),
-        updatedAt: data.updatedAt?.toDate() || new Date(),
-        resolvedAt: data.resolvedAt?.toDate(),
-        wardApprovedAt: data.wardApprovedAt?.toDate(),
-        wardRejectedAt: data.wardRejectedAt?.toDate(),
+        title: data.title || "",
+        description: data.description || "",
+        type: data.type || "other",
+        severity: data.severity || "medium",
+        wardId: data.wardId || "",
+        wardName: data.wardName || "",
+        reportedBy: data.reportedBy || "",
+        reportedByName: data.reportedByName || "",
+        status: data.status || "pending_ward_approval",
+        location: data.location || "",
+        deviceId: data.deviceId || undefined,
+        deviceName: data.deviceName || undefined,
+        assignedTo: data.assignedTo || undefined,
+        assignedToName: data.assignedToName || undefined,
+        priority: data.priority || "medium",
+        estimatedResolution: (data.estimatedResolution as Timestamp)?.toDate(),
+        actualResolution: (data.actualResolution as Timestamp)?.toDate(),
+        resolution: data.resolution || undefined,
+        images: await processIncidentImages(data.images || []),
+        attachments: data.attachments || [],
+        createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+        updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+        resolvedAt: (data.resolvedAt as Timestamp)?.toDate(),
+        // Notification fields
+        hasNewUpdate: data.hasNewUpdate || false,
+        lastUpdateBy: data.lastUpdateBy || undefined,
+        lastUpdateByName: data.lastUpdateByName || undefined,
+        lastUpdateByRole: data.lastUpdateByRole || undefined,
+        lastUpdateAt: (data.lastUpdateAt as Timestamp)?.toDate(),
+        // Workflow fields
+        wardApprovedBy: data.wardApprovedBy || undefined,
+        wardApprovedByName: data.wardApprovedByName || undefined,
+        wardApprovedAt: (data.wardApprovedAt as Timestamp)?.toDate(),
+        wardApprovalComment: data.wardApprovalComment || undefined,
+        wardRejectionReason: data.wardRejectionReason || undefined,
+        wardRejectedBy: data.wardRejectedBy || undefined,
+        wardRejectedByName: data.wardRejectedByName || undefined,
+        wardRejectedAt: (data.wardRejectedAt as Timestamp)?.toDate(),
       } as Incident;
-    });
+    }));
 
     // Filter theo status trong memory
     const approvedStatuses = ['ward_approved', 'investigating', 'in_progress', 'resolved', 'closed'];

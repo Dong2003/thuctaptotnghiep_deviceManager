@@ -4,13 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CheckCircle, XCircle, Clock, FileText, Package, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, FileText, Package, Search, Filter, ChevronLeft, ChevronRight, Trash2, Trash } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { DeviceRequest, getDeviceRequests, updateDeviceRequest, getDeviceTypeDisplayName, getWardById } from '@/lib/services/deviceRequestService';
+import { DeviceRequest, getDeviceRequests, updateDeviceRequest, deleteDeviceRequest, getDeviceTypeDisplayName, getWardById, markDeviceRequestUpdateAsViewed, fixExistingDeviceRequests } from '@/lib/services/deviceRequestService';
 import { Ward } from '@/lib/services/wardService';
 import { Device, getDevices, updateDevice, UpdateDeviceData } from '@/lib/services/deviceService';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,7 +24,11 @@ const RequestsPage = () => {
   const [availableDevices, setAvailableDevices] = useState<Device[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<DeviceRequest | null>(null);
   const [isResponseDialogOpen, setIsResponseDialogOpen] = useState(false);
+  const [isDetailView, setIsDetailView] = useState(false);
   const [isAllocationDialogOpen, setIsAllocationDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
+  const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
   const [responseNotes, setResponseNotes] = useState('');
   const [allocationData, setAllocationData] = useState({
     selectedDevices: [] as string[],
@@ -98,6 +103,10 @@ const RequestsPage = () => {
         status: 'approved', 
         notes: responseNotes,
         approvedBy: user.id
+      }, {
+        id: user.id,
+        name: user.displayName || 'Trung tâm',
+        role: 'center'
       });
       toast({ title: 'Phê duyệt thành công', description: 'Yêu cầu đã được phê duyệt.' });
       fetchRequests();
@@ -114,6 +123,10 @@ const RequestsPage = () => {
         status: 'rejected', 
         notes: responseNotes,
         approvedBy: user.id
+      }, {
+        id: user.id,
+        name: user.displayName || 'Trung tâm',
+        role: 'center'
       });
       toast({ title: 'Từ chối thành công', description: 'Yêu cầu đã bị từ chối.', variant: 'destructive' });
       fetchRequests();
@@ -123,10 +136,155 @@ const RequestsPage = () => {
     }
   };
 
-  const openResponseDialog = (request: DeviceRequest) => {
+  // Bulk delete functions
+  const handleSelectRequest = (requestId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedRequests(prev => [...prev, requestId]);
+    } else {
+      setSelectedRequests(prev => prev.filter(id => id !== requestId));
+    }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const deletableRequests = requests.filter(request => 
+        request.status === 'completed' || 
+        request.status === 'rejected' ||
+        request.status === 'received'
+      );
+      setSelectedRequests(deletableRequests.map(r => r.id));
+    } else {
+      setSelectedRequests([]);
+    }
+  };
+
+  const openBulkDeleteDialog = () => {
+    if (selectedRequests.length === 0) {
+      toast({
+        title: 'Chưa chọn yêu cầu',
+        description: 'Vui lòng chọn ít nhất một yêu cầu để xóa.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    setIsBulkDeleteDialogOpen(true);
+  };
+
+  const handleBulkDelete = async () => {
+    try {
+      const deletePromises = selectedRequests.map(id => deleteDeviceRequest(id, user?.id || '', user?.role || 'center'));
+      await Promise.all(deletePromises);
+      
+      setRequests(prev => prev.filter(r => !selectedRequests.includes(r.id)));
+      setSelectedRequests([]);
+      toast({ 
+        title: 'Xóa thành công', 
+        description: `Đã xóa ${selectedRequests.length} yêu cầu.` 
+      });
+      setIsBulkDeleteDialogOpen(false);
+    } catch (error: any) {
+      toast({ 
+        title: 'Lỗi', 
+        description: error.message || 'Không thể xóa yêu cầu', 
+        variant: 'destructive' 
+      });
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    const deletableRequests = requests.filter(request => 
+      request.status === 'completed' || 
+      request.status === 'rejected' ||
+      request.status === 'received'
+    );
+    
+    if (deletableRequests.length === 0) {
+      toast({
+        title: 'Không có yêu cầu để xóa',
+        description: 'Không có yêu cầu nào có thể xóa.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      const deletePromises = deletableRequests.map(request => deleteDeviceRequest(request.id, user?.id || '', user?.role || 'center'));
+      await Promise.all(deletePromises);
+      
+      setRequests(prev => prev.filter(r => 
+        r.status !== 'completed' && 
+        r.status !== 'rejected' &&
+        r.status !== 'received'
+      ));
+      setSelectedRequests([]);
+      toast({ 
+        title: 'Xóa thành công', 
+        description: `Đã xóa tất cả ${deletableRequests.length} yêu cầu.` 
+      });
+    } catch (error: any) {
+      toast({ 
+        title: 'Lỗi', 
+        description: error.message || 'Không thể xóa yêu cầu', 
+        variant: 'destructive' 
+      });
+    }
+  };
+
+  const openDeleteDialog = (request: DeviceRequest) => {
+    setSelectedRequest(request);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteRequest = async () => {
+    if (!selectedRequest) return;
+    
+    try {
+      await deleteDeviceRequest(selectedRequest.id, user?.id || '', user?.role || 'center');
+      setRequests(prev => prev.filter(r => r.id !== selectedRequest.id));
+      toast({ title: 'Xóa thành công', description: 'Yêu cầu đã được xóa khỏi hệ thống.' });
+      setIsDeleteDialogOpen(false);
+      setSelectedRequest(null);
+    } catch (error: any) {
+      toast({ title: 'Lỗi', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const openDetailDialog = async (request: DeviceRequest) => {
     setSelectedRequest(request);
     setResponseNotes(request.notes || '');
+    setIsDetailView(true);
     setIsResponseDialogOpen(true);
+    
+    // Tắt badge "Có cập nhật mới" khi đã xem (chỉ khi cập nhật từ phường)
+    if (request.hasNewUpdate && request.lastUpdateByRole === 'ward') {
+      try {
+        await markDeviceRequestUpdateAsViewed(request.id);
+        setRequests(prev => prev.map(r => 
+          r.id === request.id ? { ...r, hasNewUpdate: false } : r
+        ));
+      } catch (error) {
+        console.error('Error marking device request update as viewed:', error);
+      }
+    }
+  };
+
+  const openResponseDialog = async (request: DeviceRequest) => {
+    setSelectedRequest(request);
+    setResponseNotes(request.notes || '');
+    setIsDetailView(false);
+    setIsResponseDialogOpen(true);
+    
+      // Tắt badge "Có cập nhật mới" khi đã xem (chỉ khi cập nhật từ phường)
+      if (request.hasNewUpdate && request.lastUpdateByRole === 'ward') {
+        try {
+          await markDeviceRequestUpdateAsViewed(request.id);
+          setRequests(prev => prev.map(r => 
+            r.id === request.id ? { ...r, hasNewUpdate: false } : r
+          ));
+        } catch (error) {
+          console.error('Error marking device request update as viewed:', error);
+        }
+      }
   };
 
   const closeDialog = () => {
@@ -235,6 +393,10 @@ const RequestsPage = () => {
           allocatedDevicesWithQuantity.map(item => [item.deviceId, item.quantity])
         ), // Lưu số lượng cho từng thiết bị mới
         deliveredAt: new Date(),
+      }, {
+        id: user.id,
+        name: user.displayName || 'Trung tâm',
+        role: 'center'
       });
       
       toast({ 
@@ -618,15 +780,56 @@ const RequestsPage = () => {
       {/* Requests Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Danh sách yêu cầu</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Trang {currentPage} / {getTotalPages()} - Hiển thị {getPaginatedRequests().length} yêu cầu
-          </p>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Danh sách yêu cầu</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Trang {currentPage} / {getTotalPages()} - Hiển thị {getPaginatedRequests().length} yêu cầu
+              </p>
+            </div>
+            <Button onClick={fixExistingDeviceRequests} variant="outline" className="text-xs">
+              Fix Data
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
+          {/* Bulk Actions */}
+          {requests.length > 0 && (
+            <div className="flex items-center gap-2 mb-4 p-3 bg-muted rounded-lg">
+              <Checkbox
+                checked={selectedRequests.length > 0}
+                onCheckedChange={handleSelectAll}
+              />
+              <span className="text-sm text-muted-foreground">
+                {selectedRequests.length > 0 ? `Đã chọn ${selectedRequests.length} yêu cầu` : 'Chọn tất cả'}
+              </span>
+              {selectedRequests.length > 0 && (
+                <div className="flex gap-2 ml-auto">
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={openBulkDeleteDialog}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Xóa đã chọn
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleDeleteAll}
+                  >
+                    <Trash className="h-4 w-4 mr-2" />
+                    Xóa tất cả
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">Chọn</TableHead>
                 <TableHead>Phường/Xã</TableHead>
                 <TableHead>Loại thiết bị</TableHead>
                 <TableHead>Số lượng</TableHead>
@@ -640,11 +843,28 @@ const RequestsPage = () => {
               {getPaginatedRequests().map(request => {
                 const ward = wardsMap[request.wardId];
                 return (
-                  <TableRow key={request.id}>
+                  <TableRow key={request.id} onClick={() => openDetailDialog(request)} className="cursor-pointer">
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedRequests.includes(request.id)}
+                        onCheckedChange={(checked) => handleSelectRequest(request.id, checked as boolean)}
+                        disabled={request.status !== 'completed' && request.status !== 'rejected' && request.status !== 'received'}
+                      />
+                    </TableCell>
                     <TableCell>
-                      <div>
-                        <p className="font-medium">{ward?.name || 'Không xác định'}</p>
-                        <p className="text-sm text-muted-foreground">{ward?.contactPerson || '-'}</p>
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <p className="font-medium">{ward?.name || 'Không xác định'}</p>
+                          <p className="text-sm text-muted-foreground">{ward?.contactPerson || '-'}</p>
+                        </div>
+                        {request.hasNewUpdate && request.lastUpdateByRole === 'ward' && (
+                          <Badge 
+                            variant="destructive" 
+                            className="animate-pulse shadow-lg ring-2 ring-red-300 ring-opacity-50"
+                          >
+                            Có cập nhật mới
+                          </Badge>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -652,22 +872,42 @@ const RequestsPage = () => {
                     </TableCell>
                     <TableCell>{request.quantity}</TableCell>
                     <TableCell><p className="text-sm max-w-xs truncate">{request.reason}</p></TableCell>
-                    <TableCell>{request.createdAt.toLocaleDateString('vi-VN')}</TableCell>
+                    <TableCell>
+                      {request.createdAt.toLocaleDateString('vi-VN', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={getStatusColor(request.status) as any}>{getStatusText(request.status)}</Badge>
                     </TableCell>
                     <TableCell>
                       {request.status === 'pending' ? (
-                        <Button size="sm" variant="outline" onClick={() => openResponseDialog(request)}>Xử lý</Button>
+                        <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); openResponseDialog(request); }}>Xử lý</Button>
                       ) : request.status === 'approved' ? (
                         <div className="flex space-x-2">
-                          <Button size="sm" variant="default" onClick={() => openAllocationDialog(request)}>
+                          <Button size="sm" variant="default" onClick={(e) => { e.stopPropagation(); openAllocationDialog(request); }}>
                             <Package className="h-4 w-4 mr-1" />
                             Cấp phát
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); openResponseDialog(request); }}>
+                            Từ chối
                           </Button>
                           <span className="text-sm text-muted-foreground">
                             {request.approvedAt && `Phản hồi: ${request.approvedAt.toLocaleDateString('vi-VN')}`}
                           </span>
+                        </div>
+                      ) : request.status === 'completed' || request.status === 'rejected' || request.status === 'received' ? (
+                        <div className="flex space-x-2">
+                          <span className="text-sm text-muted-foreground">
+                            {request.approvedAt && `Phản hồi: ${request.approvedAt.toLocaleDateString('vi-VN')}`}
+                          </span>
+                          <Button size="sm" variant="destructive" onClick={(e) => { e.stopPropagation(); openDeleteDialog(request); }}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       ) : (
                         <span className="text-sm text-muted-foreground">
@@ -745,11 +985,16 @@ const RequestsPage = () => {
       <Dialog open={isResponseDialogOpen} onOpenChange={closeDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Xử lý yêu cầu cấp phát</DialogTitle>
+            <DialogTitle>
+              {isDetailView ? 'Chi tiết yêu cầu cấp phát' : (selectedRequest?.status === 'pending' ? 'Xử lý yêu cầu cấp phát' : 'Từ chối yêu cầu')}
+            </DialogTitle>
             <DialogDescription>
               {selectedRequest && (
                 <>
-                  Yêu cầu từ {wardsMap[selectedRequest.wardId]?.name || 'Không xác định'} - {selectedRequest.quantity} {getDeviceTypeDisplayName(selectedRequest.deviceType)}
+                  {selectedRequest.status === 'pending' 
+                    ? `Yêu cầu từ ${wardsMap[selectedRequest.wardId]?.name || 'Không xác định'} - ${selectedRequest.quantity} ${getDeviceTypeDisplayName(selectedRequest.deviceType)}`
+                    : `Từ chối yêu cầu từ ${wardsMap[selectedRequest.wardId]?.name || 'Không xác định'} - ${selectedRequest.quantity} ${getDeviceTypeDisplayName(selectedRequest.deviceType)}`
+                  }
                 </>
               )}
             </DialogDescription>
@@ -759,32 +1004,57 @@ const RequestsPage = () => {
             <div className="space-y-4 py-4">
               <div>
                 <h4 className="font-medium mb-2">Chi tiết yêu cầu:</h4>
-                <p className="text-sm text-muted-foreground">{selectedRequest.reason}</p>
+                <div className="space-y-1 text-sm">
+                  <p><b>Ngày yêu cầu:</b> {selectedRequest.createdAt.toLocaleDateString('vi-VN', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}</p>
+                  <p><b>Lý do:</b> {selectedRequest.reason}</p>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Ghi chú phản hồi:</label>
-                <Textarea
-                  value={responseNotes}
-                  onChange={(e) => setResponseNotes(e.target.value)}
-                  placeholder="Nhập ghi chú cho phản hồi..."
-                  rows={3}
-                />
-              </div>
+              {!isDetailView && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    {selectedRequest.status === 'pending' ? 'Ghi chú phản hồi:' : 'Lý do từ chối:'}
+                  </label>
+                  <Textarea
+                    value={responseNotes}
+                    onChange={(e) => setResponseNotes(e.target.value)}
+                    placeholder={selectedRequest.status === 'pending' ? 'Nhập ghi chú cho phản hồi...' : 'Nhập lý do từ chối...'}
+                    rows={3}
+                  />
+                </div>
+              )}
             </div>
           )}
 
           <DialogFooter className="space-x-2">
-            <Button variant="outline" onClick={closeDialog}>Hủy</Button>
-            <Button variant="destructive" onClick={() => selectedRequest && handleRejectRequest(selectedRequest.id)}>Từ chối</Button>
-            <Button onClick={() => selectedRequest && handleApproveRequest(selectedRequest.id)}>Phê duyệt</Button>
+            <Button variant="outline" onClick={closeDialog}>
+              {isDetailView ? 'Đóng' : 'Hủy'}
+            </Button>
+            {!isDetailView && (
+              <>
+                {selectedRequest?.status === 'pending' ? (
+                  <>
+                    <Button variant="destructive" onClick={() => selectedRequest && handleRejectRequest(selectedRequest.id)}>Từ chối</Button>
+                    <Button onClick={() => selectedRequest && handleApproveRequest(selectedRequest.id)}>Phê duyệt</Button>
+                  </>
+                ) : selectedRequest?.status === 'approved' ? (
+                  <Button variant="destructive" onClick={() => selectedRequest && handleRejectRequest(selectedRequest.id)}>Từ chối</Button>
+                ) : null}
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Allocation Dialog */}
       <Dialog open={isAllocationDialogOpen} onOpenChange={closeAllocationDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Cấp phát thiết bị</DialogTitle>
             <DialogDescription>
@@ -979,6 +1249,68 @@ const RequestsPage = () => {
               <Package className="h-4 w-4 mr-2" />
               Xác nhận cấp phát
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xóa yêu cầu thiết bị</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <p>Bạn có chắc chắn muốn xóa yêu cầu thiết bị này không?</p>
+            {selectedRequest && (
+              <div className="p-3 bg-muted rounded-md">
+                <p><b>Phường/Xã:</b> {wardsMap[selectedRequest.wardId]?.name || 'Không xác định'}</p>
+                <p><b>Loại thiết bị:</b> {getDeviceTypeDisplayName(selectedRequest.deviceType)}</p>
+                <p><b>Số lượng:</b> {selectedRequest.quantity}</p>
+                <p><b>Ngày yêu cầu:</b> {selectedRequest.createdAt.toLocaleDateString('vi-VN', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}</p>
+                <p><b>Trạng thái:</b> {getStatusText(selectedRequest.status)}</p>
+              </div>
+            )}
+            <p className="text-sm text-muted-foreground">Hành động này không thể hoàn tác.</p>
+          </div>
+          <DialogFooter className="space-x-2">
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={handleDeleteRequest}>Xóa</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Dialog */}
+      <Dialog open={isBulkDeleteDialogOpen} onOpenChange={setIsBulkDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xóa nhiều yêu cầu</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa {selectedRequests.length} yêu cầu đã chọn không? Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <div className="max-h-40 overflow-y-auto space-y-2">
+              {selectedRequests.map(id => {
+                const request = requests.find(r => r.id === id);
+                return request ? (
+                  <div key={id} className="p-2 bg-muted rounded text-sm">
+                    <p><b>{getDeviceTypeDisplayName(request.deviceType)}</b> - {request.status}</p>
+                  </div>
+                ) : null;
+              })}
+            </div>
+          </div>
+
+          <DialogFooter className="space-x-2">
+            <Button variant="outline" onClick={() => setIsBulkDeleteDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={handleBulkDelete}>Xóa {selectedRequests.length} yêu cầu</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

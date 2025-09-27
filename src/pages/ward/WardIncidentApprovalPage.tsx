@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -32,27 +32,27 @@ const WardIncidentApprovalPage = () => {
   const { toast } = useToast();
 
   // Fetch incidents pending ward approval
-  const fetchIncidents = async () => {
+  const fetchIncidents = useCallback(async () => {
     if (!user?.wardId) return;
-    
     setLoading(true);
     try {
       const data = await getIncidentsForWardApproval(user.wardId);
       setIncidents(data);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       toast({
         title: 'Lỗi',
-        description: error.message || 'Không thể tải danh sách sự cố',
+        description: message || 'Không thể tải danh sách sự cố',
         variant: 'destructive'
       });
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.wardId, toast]);
 
   useEffect(() => {
     fetchIncidents();
-  }, [user?.wardId]);
+  }, [fetchIncidents]);
 
   // Open dialogs
   const openDetailDialog = (incident: Incident) => {
@@ -70,7 +70,7 @@ const WardIncidentApprovalPage = () => {
 
   // Process incident (approve or reject)
   const handleProcessIncident = async () => {
-    if (!selectedIncident || !user || !processingAction || !processingComment.trim()) return;
+    if (!selectedIncident || !user || !processingAction) return;
 
     try {
       if (processingAction === 'approve') {
@@ -81,6 +81,10 @@ const WardIncidentApprovalPage = () => {
           description: 'Sự cố đã được duyệt và chuyển lên trung tâm.'
         });
       } else if (processingAction === 'reject') {
+        if (!processingComment.trim()) {
+          toast({ title: 'Thiếu lý do', description: 'Vui lòng nhập lý do từ chối.', variant: 'destructive' });
+          return;
+        }
         await rejectIncidentByWard(
           selectedIncident.id,
           user.id,
@@ -102,10 +106,11 @@ const WardIncidentApprovalPage = () => {
       setSelectedIncident(null);
       setProcessingAction(null);
       setProcessingComment('');
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       toast({
         title: 'Lỗi',
-        description: error.message || 'Không thể xử lý sự cố',
+        description: message || 'Không thể xử lý sự cố',
         variant: 'destructive'
       });
     }
@@ -343,21 +348,158 @@ const WardIncidentApprovalPage = () => {
                 </div>
               </div>
 
-              {selectedIncident.images && selectedIncident.images.length > 0 && (
+              {/* Hiển thị media (hỗ trợ cả mediaFiles - used by user page - và images/attachments stored by service) */}
+              {(() => {
+                type WithMedia = Incident & { mediaFiles?: string[]; images?: string[]; attachments?: string[] };
+                const si = selectedIncident as WithMedia;
+                const mediaUrls: string[] = si.mediaFiles ?? si.images ?? si.attachments ?? [];
+                if (!mediaUrls || mediaUrls.length === 0) return null;
+
+                return (
                 <div>
-                  <h4 className="font-medium mb-2">Hình ảnh:</h4>
+                    <h4 className="font-medium mb-2">Hình ảnh/Video minh chứng:</h4>
                   <div className="grid grid-cols-2 gap-2">
-                    {selectedIncident.images.map((image, index) => (
-                      <img
-                        key={index}
-                        src={image}
+                      {mediaUrls.map((url, index) => (
+                        <div key={index} className="w-full h-32">
+                          {url.includes('video') || url.includes('.mp4') || url.includes('.mov') ? (
+                            <video src={url} controls className="w-full h-full object-cover rounded-md border" />
+                          ) : (
+                            <img 
+                              src={url} 
                         alt={`Hình ảnh sự cố ${index + 1}`}
-                        className="w-full h-32 object-cover rounded-md border"
-                      />
+                              className="w-full h-full object-cover rounded-md border cursor-pointer hover:opacity-90" 
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                
+                                // Tạo modal ảnh hoàn toàn độc lập
+                                const imageModal = document.createElement('div');
+                                imageModal.style.cssText = `
+                                  position: fixed;
+                                  top: 0;
+                                  left: 0;
+                                  width: 100vw;
+                                  height: 100vh;
+                                  background: rgba(0, 0, 0, 0.9);
+                                  display: flex;
+                                  align-items: center;
+                                  justify-content: center;
+                                  z-index: 999998;
+                                  cursor: pointer;
+                                  pointer-events: auto;
+                                `;
+                                
+                                const closeImageModal = () => {
+                                  if (document.body.contains(imageModal)) {
+                                    document.body.removeChild(imageModal);
+                                  }
+                                  document.removeEventListener('keydown', handleKeyDown);
+                                };
+                                
+                                const handleKeyDown = (e: KeyboardEvent) => {
+                                  if (e.key === 'Escape') {
+                                    closeImageModal();
+                                  }
+                                };
+                                
+                                imageModal.onclick = (e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  closeImageModal();
+                                  return false;
+                                };
+                                
+                                document.addEventListener('keydown', handleKeyDown);
+                                
+                                const img = document.createElement('img');
+                                img.src = url;
+                                img.style.cssText = `
+                                  max-width: 90vw;
+                                  max-height: 90vh;
+                                  object-fit: contain;
+                                  cursor: default;
+                                `;
+                                img.onclick = (e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  return false;
+                                };
+                                
+                                // Thêm nút đóng
+                                const closeBtn = document.createElement('button');
+                                closeBtn.innerHTML = '×';
+                                closeBtn.style.cssText = `
+                                  position: fixed;
+                                  top: 20px;
+                                  right: 20px;
+                                  width: 40px;
+                                  height: 40px;
+                                  background: rgba(255, 0, 0, 0.8);
+                                  color: white;
+                                  border: 2px solid white;
+                                  border-radius: 50%;
+                                  font-size: 20px;
+                                  font-weight: bold;
+                                  cursor: pointer;
+                                  display: flex;
+                                  align-items: center;
+                                  justify-content: center;
+                                  z-index: 999999;
+                                  transition: all 0.2s ease;
+                                  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                                  pointer-events: auto;
+                                `;
+                                
+                                // Thêm hover effect
+                                closeBtn.onmouseenter = () => {
+                                  closeBtn.style.background = 'rgba(255, 0, 0, 1)';
+                                  closeBtn.style.transform = 'scale(1.1)';
+                                  closeBtn.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.5)';
+                                };
+                                
+                                closeBtn.onmouseleave = () => {
+                                  closeBtn.style.background = 'rgba(255, 0, 0, 0.8)';
+                                  closeBtn.style.transform = 'scale(1)';
+                                  closeBtn.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
+                                };
+                                closeBtn.onclick = (e) => {
+                                  // Ngăn chặn tất cả event propagation
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (e.stopImmediatePropagation) {
+                                    e.stopImmediatePropagation();
+                                  }
+                                  e.cancelBubble = true;
+                                  
+                                  // Đóng modal trong một microtask riêng biệt để tránh conflict
+                                  setTimeout(() => {
+                                    closeImageModal();
+                                  }, 0);
+                                  
+                                  return false;
+                                };
+                                
+                                // Thêm event listener trực tiếp cho nút
+                                closeBtn.addEventListener('click', (e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  closeImageModal();
+                                }, { capture: true });
+                                
+                                imageModal.appendChild(closeBtn);
+                                imageModal.appendChild(img);
+                                document.body.appendChild(imageModal);
+                                
+                                return false;
+                              }}
+                            />
+                          )}
+                        </div>
                     ))}
                   </div>
                 </div>
-              )}
+                );
+              })()}
             </div>
           )}
 
@@ -425,7 +567,7 @@ const WardIncidentApprovalPage = () => {
 
             <div>
               <Label htmlFor="processingComment">
-                {processingAction === 'approve' ? 'Bình luận duyệt' : 'Lý do từ chối'} *
+                {processingAction === 'approve' ? 'Bình luận duyệt (không bắt buộc)' : 'Lý do từ chối *'}
               </Label>
               <Textarea
                 id="processingComment"
@@ -433,7 +575,7 @@ const WardIncidentApprovalPage = () => {
                 onChange={(e) => setProcessingComment(e.target.value)}
                 placeholder={
                   processingAction === 'approve' 
-                    ? "Nhập bình luận về việc duyệt sự cố này..." 
+                    ? "Nhập bình luận (tuỳ chọn)..." 
                     : "Nhập lý do từ chối báo cáo sự cố này..."
                 }
                 rows={4}
@@ -455,7 +597,7 @@ const WardIncidentApprovalPage = () => {
             </Button>
             <Button 
               onClick={handleProcessIncident}
-              disabled={!processingAction || !processingComment.trim()}
+              disabled={!processingAction || (processingAction === 'reject' && !processingComment.trim())}
               className={
                 processingAction === 'approve' 
                   ? "bg-green-600 hover:bg-green-700" 

@@ -4,11 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertTriangle, Eye, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { AlertTriangle, Eye, Clock, CheckCircle, XCircle, Loader2, Trash2, Trash } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getIncidentsForWardApproval, getAllIncidentsForWard, updateIncident, getIncidentStats, approveIncidentByWard, rejectIncidentByWard, type Incident } from '@/lib/services/incidentService';
+import { getIncidentsForWardApproval, getAllIncidentsForWard, updateIncident, deleteIncident, getIncidentStats, approveIncidentByWard, rejectIncidentByWard, markIncidentUpdateAsViewed, type Incident } from '@/lib/services/incidentService';
 import { getDevices } from '@/lib/services/deviceService';
 import { useToast } from '@/hooks/use-toast';
 
@@ -21,6 +22,9 @@ const WardIncidentsPage = () => {
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [isProcessingDialogOpen, setIsProcessingDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
+  const [selectedIncidents, setSelectedIncidents] = useState<string[]>([]);
   const [processingAction, setProcessingAction] = useState<'approve' | 'reject'>('approve');
   const [processingComment, setProcessingComment] = useState('');
   const { toast } = useToast();
@@ -77,9 +81,22 @@ const WardIncidentsPage = () => {
     }
   };
 
-  const openDetailDialog = (incident: Incident) => {
+  const openDetailDialog = async (incident: Incident) => {
     setSelectedIncident(incident);
     setIsDetailDialogOpen(true);
+    
+    // Đánh dấu đã xem cập nhật mới nếu có
+    if (incident.hasNewUpdate) {
+      try {
+        await markIncidentUpdateAsViewed(incident.id);
+        // Cập nhật state để ẩn badge
+        setIncidents(prev => prev.map(i => 
+          i.id === incident.id ? { ...i, hasNewUpdate: false } : i
+        ));
+      } catch (error) {
+        console.error('Error marking incident update as viewed:', error);
+      }
+    }
   };
 
   const openProcessingDialog = (incident: Incident) => {
@@ -87,6 +104,119 @@ const WardIncidentsPage = () => {
     setProcessingAction('approve');
     setProcessingComment('');
     setIsProcessingDialogOpen(true);
+  };
+
+  const openDeleteDialog = (incident: Incident) => {
+    setSelectedIncident(incident);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteIncident = async () => {
+    if (!selectedIncident) return;
+    
+    try {
+      await deleteIncident(selectedIncident.id);
+      setIncidents(prev => prev.filter(i => i.id !== selectedIncident.id));
+      toast({ title: 'Xóa thành công', description: 'Sự cố đã được xóa khỏi hệ thống.' });
+      setIsDeleteDialogOpen(false);
+      setSelectedIncident(null);
+    } catch (error: any) {
+      toast({ title: 'Lỗi', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  // Bulk delete functions
+  const handleSelectIncident = (incidentId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedIncidents(prev => [...prev, incidentId]);
+    } else {
+      setSelectedIncidents(prev => prev.filter(id => id !== incidentId));
+    }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const deletableIncidents = incidents.filter(incident => 
+        incident.status === 'ward_rejected' ||
+        incident.status === 'resolved' || 
+        incident.status === 'closed'
+      );
+      setSelectedIncidents(deletableIncidents.map(i => i.id));
+    } else {
+      setSelectedIncidents([]);
+    }
+  };
+
+  const openBulkDeleteDialog = () => {
+    if (selectedIncidents.length === 0) {
+      toast({
+        title: 'Chưa chọn sự cố',
+        description: 'Vui lòng chọn ít nhất một sự cố để xóa.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    setIsBulkDeleteDialogOpen(true);
+  };
+
+  const handleBulkDelete = async () => {
+    try {
+      const deletePromises = selectedIncidents.map(id => deleteIncident(id));
+      await Promise.all(deletePromises);
+      
+      setIncidents(prev => prev.filter(i => !selectedIncidents.includes(i.id)));
+      setSelectedIncidents([]);
+      toast({ 
+        title: 'Xóa thành công', 
+        description: `Đã xóa ${selectedIncidents.length} sự cố.` 
+      });
+      setIsBulkDeleteDialogOpen(false);
+    } catch (error: any) {
+      toast({ 
+        title: 'Lỗi', 
+        description: error.message || 'Không thể xóa sự cố', 
+        variant: 'destructive' 
+      });
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    const deletableIncidents = incidents.filter(incident => 
+      incident.status === 'ward_rejected' ||
+      incident.status === 'resolved' || 
+      incident.status === 'closed'
+    );
+    
+    if (deletableIncidents.length === 0) {
+      toast({
+        title: 'Không có sự cố để xóa',
+        description: 'Không có sự cố nào có thể xóa.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      const deletePromises = deletableIncidents.map(incident => deleteIncident(incident.id));
+      await Promise.all(deletePromises);
+      
+      setIncidents(prev => prev.filter(i => 
+        i.status !== 'ward_rejected' &&
+        i.status !== 'resolved' && 
+        i.status !== 'closed'
+      ));
+      setSelectedIncidents([]);
+      toast({ 
+        title: 'Xóa thành công', 
+        description: `Đã xóa tất cả ${deletableIncidents.length} sự cố.` 
+      });
+    } catch (error: any) {
+      toast({ 
+        title: 'Lỗi', 
+        description: error.message || 'Không thể xóa sự cố', 
+        variant: 'destructive' 
+      });
+    }
   };
 
   const handleProcessIncident = async () => {
@@ -282,9 +412,43 @@ const WardIncidentsPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Bulk Actions */}
+          {incidents.length > 0 && (
+            <div className="flex items-center gap-2 mb-4 p-3 bg-muted rounded-lg">
+              <Checkbox
+                checked={selectedIncidents.length > 0}
+                onCheckedChange={handleSelectAll}
+              />
+              <span className="text-sm text-muted-foreground">
+                {selectedIncidents.length > 0 ? `Đã chọn ${selectedIncidents.length} sự cố` : 'Chọn tất cả'}
+              </span>
+              {selectedIncidents.length > 0 && (
+                <div className="flex gap-2 ml-auto">
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={openBulkDeleteDialog}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Xóa đã chọn
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleDeleteAll}
+                  >
+                    <Trash className="h-4 w-4 mr-2" />
+                    Xóa tất cả
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">Chọn</TableHead>
                 <TableHead>Tiêu đề sự cố</TableHead>
                 <TableHead>Thiết bị</TableHead>
                 <TableHead>Người báo cáo</TableHead>
@@ -298,13 +462,38 @@ const WardIncidentsPage = () => {
               {incidents.map((incident) => {
                 const device = devices.find(d => d.id === incident.deviceId);
                 return (
-                  <TableRow key={incident.id}>
+                  <TableRow 
+                    key={incident.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => openDetailDialog(incident)}
+                  >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedIncidents.includes(incident.id)}
+                        onCheckedChange={(checked) => handleSelectIncident(incident.id, checked as boolean)}
+                        disabled={incident.status !== 'ward_rejected' && 
+                                 incident.status !== 'resolved' && 
+                                 incident.status !== 'closed'}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div>
-                        <p className="font-medium">{incident.title}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{incident.title}</p>
+                          {incident.hasNewUpdate && (
+                            <Badge variant="destructive" className="text-xs px-2 py-1 animate-pulse shadow-lg ring-2 ring-red-300 ring-opacity-50">
+                              Có cập nhật mới
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground line-clamp-1">
                           {incident.description}
                         </p>
+                        {incident.hasNewUpdate && incident.lastUpdateByName && (
+                          <p className="text-xs text-blue-600 mt-1">
+                            Cập nhật bởi: {incident.lastUpdateByName}
+                          </p>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -326,7 +515,7 @@ const WardIncidentsPage = () => {
                         {getSeverityText(incident.severity)}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="space-y-2">
                         <Badge variant={getStatusColor(incident.status) as any}>
                           {getStatusText(incident.status)}
@@ -344,16 +533,28 @@ const WardIncidentsPage = () => {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {new Date(incident.createdAt).toLocaleDateString('vi-VN')}
+                      {new Date(incident.createdAt).toLocaleDateString('vi-VN', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
                     </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openDetailDialog(incident)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <div className="flex gap-2">
+                        {(incident.status === 'ward_rejected' || 
+                          incident.status === 'resolved' || 
+                          incident.status === 'closed') && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => openDeleteDialog(incident)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -365,7 +566,7 @@ const WardIncidentsPage = () => {
 
       {/* Detail Dialog */}
       <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chi tiết sự cố</DialogTitle>
           </DialogHeader>
@@ -391,7 +592,13 @@ const WardIncidentsPage = () => {
                 </div>
                 <div>
                   <h4 className="font-medium mb-1">Ngày báo cáo:</h4>
-                  <p className="text-sm">{new Date(selectedIncident.createdAt).toLocaleDateString('vi-VN')}</p>
+                  <p className="text-sm">{new Date(selectedIncident.createdAt).toLocaleDateString('vi-VN', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}</p>
                 </div>
               </div>
 
@@ -409,6 +616,162 @@ const WardIncidentsPage = () => {
                   <p className="text-sm">{selectedIncident.description}</p>
                 </div>
               </div>
+
+              {/* Hiển thị media files nếu có */}
+              {(() => {
+                type WithMedia = Incident & { mediaFiles?: string[]; images?: string[]; attachments?: string[] };
+                const si = selectedIncident as WithMedia;
+                const mediaUrls: string[] = si.mediaFiles ?? si.images ?? si.attachments ?? [];
+                if (!mediaUrls || mediaUrls.length === 0) return null;
+
+                return (
+                <div>
+                  <h4 className="font-medium mb-2">Hình ảnh/Video minh chứng:</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {mediaUrls.map((url, index) => {
+                      const isVideo = url.includes('.mp4') || url.includes('.mov') || url.includes('.avi');
+                      return (
+                        <div key={index} className="relative">
+                          <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                            {isVideo ? (
+                              <video src={url} controls className="w-full h-full object-cover" />
+                            ) : (
+                              <img 
+                                src={url} 
+                                alt={`Evidence ${index + 1}`}
+                                className="w-full h-full object-cover cursor-pointer hover:opacity-90"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  // Tạo modal ảnh hoàn toàn độc lập
+                                  const imageModal = document.createElement('div');
+                                  imageModal.setAttribute('data-image-modal', 'true');
+                                  imageModal.style.cssText = `
+                                    position: fixed;
+                                    top: 0;
+                                    left: 0;
+                                    width: 100vw;
+                                    height: 100vh;
+                                    background: rgba(0, 0, 0, 0.9);
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    z-index: 999998;
+                                    cursor: pointer;
+                                    pointer-events: auto;
+                                  `;
+                                  
+                                  const closeImageModal = () => {
+                                    if (document.body.contains(imageModal)) {
+                                      document.body.removeChild(imageModal);
+                                    }
+                                    document.removeEventListener('keydown', handleKeyDown);
+                                  };
+                                  
+                                  const handleKeyDown = (e: KeyboardEvent) => {
+                                    if (e.key === 'Escape') {
+                                      closeImageModal();
+                                    }
+                                  };
+                                  
+                                  imageModal.onclick = (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (e.stopImmediatePropagation) {
+                                      e.stopImmediatePropagation();
+                                    }
+                                    e.cancelBubble = true;
+                                    setTimeout(() => { closeImageModal(); }, 0);
+                                    return false;
+                                  };
+                                  document.addEventListener('keydown', handleKeyDown);
+                                  
+                                  const img = document.createElement('img');
+                                  img.src = url;
+                                  img.style.cssText = `
+                                    max-width: 90vw;
+                                    max-height: 90vh;
+                                    object-fit: contain;
+                                    cursor: default;
+                                  `;
+                                  img.onclick = (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (e.stopImmediatePropagation) {
+                                      e.stopImmediatePropagation();
+                                    }
+                                    return false;
+                                  };
+                                  
+                                  // Thêm nút đóng
+                                  const closeBtn = document.createElement('button');
+                                  closeBtn.innerHTML = '×';
+                                  closeBtn.style.cssText = `
+                                    position: fixed;
+                                    top: 20px;
+                                    right: 20px;
+                                    width: 40px;
+                                    height: 40px;
+                                    background: rgba(255, 0, 0, 0.8);
+                                    color: white;
+                                    border: 2px solid white;
+                                    border-radius: 50%;
+                                    font-size: 20px;
+                                    font-weight: bold;
+                                    cursor: pointer;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    z-index: 999999;
+                                    transition: all 0.2s ease;
+                                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                                    pointer-events: auto;
+                                  `;
+                                  
+                                  closeBtn.onmouseenter = () => {
+                                    closeBtn.style.background = 'rgba(255, 0, 0, 1)';
+                                    closeBtn.style.transform = 'scale(1.1)';
+                                    closeBtn.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.5)';
+                                  };
+                                  
+                                  closeBtn.onmouseleave = () => {
+                                    closeBtn.style.background = 'rgba(255, 0, 0, 0.8)';
+                                    closeBtn.style.transform = 'scale(1)';
+                                    closeBtn.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
+                                  };
+                                  closeBtn.onclick = (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (e.stopImmediatePropagation) {
+                                      e.stopImmediatePropagation();
+                                    }
+                                    e.cancelBubble = true;
+                                    setTimeout(() => { closeImageModal(); }, 0);
+                                    return false;
+                                  };
+                                  
+                                  closeBtn.addEventListener('click', (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    closeImageModal();
+                                  }, { capture: true });
+                                  
+                                  imageModal.appendChild(closeBtn);
+                                  imageModal.appendChild(img);
+                                  document.body.appendChild(imageModal);
+                                  
+                                  return false;
+                                }}
+                              />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                );
+              })()}
 
               {selectedIncident.resolution && (
                 <div>
@@ -441,7 +804,7 @@ const WardIncidentsPage = () => {
 
       {/* Processing Dialog */}
       <Dialog open={isProcessingDialogOpen} onOpenChange={setIsProcessingDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Xử lý sự cố</DialogTitle>
             <DialogDescription>
@@ -485,10 +848,10 @@ const WardIncidentsPage = () => {
                 onChange={(e) => setProcessingComment(e.target.value)}
                 placeholder={
                   processingAction === 'approve'
-                    ? 'Nhập lý do duyệt sự cố...'
+                    ? 'Nhập lý do duyệt sự cố (không bắt buộc)...'
                     : 'Nhập lý do từ chối sự cố...'
                 }
-                required
+                required={processingAction !== 'approve'}
               />
             </div>
           </div>
@@ -500,10 +863,70 @@ const WardIncidentsPage = () => {
             <Button
               onClick={handleProcessIncident}
               variant={processingAction === 'approve' ? 'default' : 'destructive'}
-              disabled={!processingComment.trim()}
+              disabled={processingAction !== 'approve' && !processingComment.trim()}
             >
               {processingAction === 'approve' ? 'Duyệt' : 'Từ chối'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Xóa sự cố</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <p>Bạn có chắc chắn muốn xóa sự cố này không?</p>
+            {selectedIncident && (
+              <div className="p-3 bg-muted rounded-md">
+                <p><b>Tiêu đề:</b> {selectedIncident.title}</p>
+                <p><b>Trạng thái:</b> {getStatusText(selectedIncident.status)}</p>
+                <p><b>Ngày báo cáo:</b> {new Date(selectedIncident.createdAt).toLocaleDateString('vi-VN', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}</p>
+              </div>
+            )}
+            <p className="text-sm text-muted-foreground">Hành động này không thể hoàn tác.</p>
+          </div>
+          <DialogFooter className="space-x-2">
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={handleDeleteIncident}>Xóa</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Dialog */}
+      <Dialog open={isBulkDeleteDialogOpen} onOpenChange={setIsBulkDeleteDialogOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Xóa nhiều sự cố</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa {selectedIncidents.length} sự cố đã chọn không? Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <div className="max-h-40 overflow-y-auto space-y-2">
+              {selectedIncidents.map(id => {
+                const incident = incidents.find(i => i.id === id);
+                return incident ? (
+                  <div key={id} className="p-2 bg-muted rounded text-sm">
+                    <p><b>{incident.title}</b> - {incident.status}</p>
+                  </div>
+                ) : null;
+              })}
+            </div>
+          </div>
+
+          <DialogFooter className="space-x-2">
+            <Button variant="outline" onClick={() => setIsBulkDeleteDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={handleBulkDelete}>Xóa {selectedIncidents.length} sự cố</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

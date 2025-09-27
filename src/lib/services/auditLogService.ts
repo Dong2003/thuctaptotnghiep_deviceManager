@@ -160,8 +160,8 @@ export const getAuditLogs = async (filters: AuditLogFilters = {}): Promise<Audit
       q = query(q, where('timestamp', '<=', Timestamp.fromDate(filters.endDate)));
     }
     
-    // Order by timestamp descending and limit
-    q = query(q, orderBy('timestamp', 'desc'));
+    // Không sử dụng orderBy để tránh lỗi Firestore index
+    // Sẽ sort trong JavaScript thay vì Firestore
     if (filters.limit) {
       q = query(q, limit(filters.limit));
     }
@@ -176,6 +176,9 @@ export const getAuditLogs = async (filters: AuditLogFilters = {}): Promise<Audit
         createdAt: data.createdAt?.toDate() || new Date()
       } as AuditLog;
     });
+    
+    // Sort by timestamp descending trong JavaScript thay vì Firestore
+    logs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     
     console.log(`Found ${logs.length} audit logs from Firestore`);
     
@@ -285,9 +288,7 @@ export const logAuthAction = async (
     userRole,
     action,
     resource: AUDIT_RESOURCES.SYSTEM,
-    details,
-    timestamp: new Date(),
-    createdAt: new Date()
+    details
   });
 };
 
@@ -316,9 +317,7 @@ export const logDeviceAction = async (
       ...details
     },
     wardId,
-    wardName,
-    timestamp: new Date(),
-    createdAt: new Date()
+    wardName
   });
 };
 
@@ -343,9 +342,7 @@ export const logRequestAction = async (
     resourceId: requestId,
     details,
     wardId,
-    wardName,
-    timestamp: new Date(),
-    createdAt: new Date()
+    wardName
   });
 };
 
@@ -370,9 +367,7 @@ export const logIncidentAction = async (
     resourceId: incidentId,
     details,
     wardId,
-    wardName,
-    timestamp: new Date(),
-    createdAt: new Date()
+    wardName
   });
 };
 
@@ -401,9 +396,7 @@ export const logUserAction = async (
       ...details
     },
     wardId,
-    wardName,
-    timestamp: new Date(),
-    createdAt: new Date()
+    wardName
   });
 };
 
@@ -430,9 +423,7 @@ export const logWardAction = async (
       ...details
     },
     wardId,
-    wardName,
-    timestamp: new Date(),
-    createdAt: new Date()
+    wardName
   });
 };
 
@@ -447,7 +438,6 @@ export const createSampleAuditLogs = async (): Promise<void> => {
       action: AUDIT_ACTIONS.LOGIN,
       resource: AUDIT_RESOURCES.SYSTEM,
       details: { ipAddress: '192.168.1.1', userAgent: 'Mozilla/5.0...' },
-      timestamp: new Date(),
       createdAt: new Date()
     },
     {
@@ -461,7 +451,6 @@ export const createSampleAuditLogs = async (): Promise<void> => {
       details: { deviceType: 'laptop', quantity: 2, reason: 'Cần thiết bị cho nhân viên mới' },
       wardId: 'ward_001',
       wardName: 'Phường 1',
-      timestamp: new Date(),
       createdAt: new Date()
     },
     {
@@ -475,7 +464,6 @@ export const createSampleAuditLogs = async (): Promise<void> => {
       details: { deviceName: 'Laptop Dell XPS', deviceType: 'laptop', location: 'Phòng IT' },
       wardId: 'ward_001',
       wardName: 'Phường 1',
-      timestamp: new Date(),
       createdAt: new Date()
     },
     {
@@ -489,7 +477,6 @@ export const createSampleAuditLogs = async (): Promise<void> => {
       details: { deviceId: 'dev_001', issue: 'Máy tính không khởi động được', priority: 'high' },
       wardId: 'ward_001',
       wardName: 'Phường 1',
-      timestamp: new Date(),
       createdAt: new Date()
     }
   ];
