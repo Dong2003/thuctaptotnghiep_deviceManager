@@ -559,14 +559,6 @@ const WardDevicesPage = () => {
                           </div>
                         </DialogContent>
                       </Dialog>
-                      {!d.assignedTo && (
-                        <Button 
-                          size="sm" 
-                          onClick={() => openAssignDialog(d)}
-                        >
-                          Gán thiết bị
-                        </Button>
-                      )}
                     </div>
                     </TableCell>
                   </TableRow>
