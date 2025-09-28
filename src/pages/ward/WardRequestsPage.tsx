@@ -29,18 +29,36 @@ const WardRequestsPage = () => {
     }
   }, [user?.wardId]);
 
-  const fetchRequests = async () => {
-    try {
-      const allRequests = await getDeviceRequests(user?.wardId);
-      // Hiển thị các yêu cầu từ "Đang giao" đến "Đã nhận"
-      const filteredRequests = allRequests.filter(r => 
-        r.status === 'delivering' || r.status === 'received'
+const fetchRequests = async () => {
+  try {
+    const allRequests = await getDeviceRequests(user?.wardId);
+    // Hiển thị các yêu cầu từ "Đang giao" đến "Đã nhận"
+    const filteredRequests = allRequests.filter(
+      (r) => r.status === "delivering" || r.status === "received"
+    );
+    setRequests(filteredRequests);
+  } catch (error: any) {
+    console.error("❌ Firestore error:", error);
+
+    // Nếu lỗi do thiếu index thì log ra link tạo index
+    if (error.code === "failed-precondition") {
+      const match = error.message.match(
+        /https:\/\/console\.firebase\.google\.com\/[^\s]+/
       );
-      setRequests(filteredRequests);
-    } catch (error: any) {
-      toast({ title: 'Lỗi', description: error.message, variant: 'destructive' });
+      if (match) {
+        console.warn("⚡ Firestore requires composite index ⚡");
+        console.warn("👉 Tạo ở đây:", match[0]);
+      }
     }
-  };
+
+    toast({
+      title: "Lỗi",
+      description: error.message,
+      variant: "destructive",
+    });
+  }
+};
+
 
   const getStatusColor = (status: string) => {
     switch (status) {

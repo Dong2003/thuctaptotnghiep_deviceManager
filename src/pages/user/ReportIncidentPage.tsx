@@ -10,9 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { AlertTriangle, Plus, Eye, Clock, CheckCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getDevices,getDevicesByUser, type Device } from '@/lib/services/deviceService';
+import { getDevicesByUser, type Device } from '@/lib/services/deviceService';
 import { getIncidentsByUser, createIncident, type Incident } from '@/lib/services/incidentService';
 import { useToast } from '@/hooks/use-toast';
+
+// Firebase storage
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
+const storage = getStorage();
 
 const ReportIncidentPage = () => {
   const { user } = useAuth();
@@ -22,6 +27,7 @@ const ReportIncidentPage = () => {
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const { toast } = useToast();
 
@@ -32,6 +38,7 @@ const ReportIncidentPage = () => {
     description: '',
     severity: 'medium' as Incident['severity'],
     location: '',
+    evidenceUrls: [] as string[],
   });
   
   useEffect(() => {
@@ -40,12 +47,13 @@ const ReportIncidentPage = () => {
       try {
         setLoading(true);
         const [devicesData, incidentsData] = await Promise.all([
-          getDevicesByUser(user.wardId, user.id),   // chỉ lấy thiết bị của user
-          getIncidentsByUser(user.wardId, user.id), // chỉ lấy sự cố của user
+          getDevicesByUser(user.wardId, user.id),
+          getIncidentsByUser(user.wardId, user.id),
         ]);
         setDevices(devicesData);
         setIncidents(incidentsData);
       } catch (error: any) {
+          console.error("Firestore query error:", error);
         toast({
           title: "Lỗi tải dữ liệu",
           description: error.message || "Không thể tải dữ liệu",
@@ -59,6 +67,41 @@ const ReportIncidentPage = () => {
     fetchData();
   }, [user?.wardId, user?.id, toast]);
 
+  // Upload file lên Firebase Storage
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files);
+
+    try {
+      setUploading(true);
+      const uploadedUrls: string[] = [];
+
+      for (const file of files) {
+        const storageRef = ref(storage, `incidents/${Date.now()}-${file.name}`);
+        await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(storageRef);
+        uploadedUrls.push(downloadURL);
+      }
+
+      setNewIncident((prev) => ({
+        ...prev,
+        evidenceUrls: [...prev.evidenceUrls, ...uploadedUrls],
+      }));
+
+      toast({
+        title: "Tải ảnh thành công",
+        description: `${files.length} ảnh đã được tải lên.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Lỗi tải ảnh",
+        description: error.message || "Không thể tải ảnh",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleSubmitIncident = async () => {
     if (!user) return;
@@ -77,15 +120,14 @@ const ReportIncidentPage = () => {
         deviceId: newIncident.deviceId,
         deviceName: selectedDevice?.name || newIncident.deviceName,
         priority: 'medium' as const,
+        evidenceUrls: newIncident.evidenceUrls,
       };
 
       await createIncident(incidentData, user.id, user.displayName);
       
-      // Refresh incidents list
       const updatedIncidents = await getIncidentsByUser(user.wardId!, user.id);
       setIncidents(updatedIncidents);
 
-      
       setIsReportDialogOpen(false);
       setNewIncident({
         deviceId: '',
@@ -94,6 +136,7 @@ const ReportIncidentPage = () => {
         description: '',
         severity: 'medium',
         location: '',
+        evidenceUrls: [],
       });
 
       toast({
@@ -116,75 +159,51 @@ const ReportIncidentPage = () => {
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case 'low':
-        return 'default';
-      case 'medium':
-        return 'secondary';
-      case 'high':
-        return 'destructive';
-      case 'critical':
-        return 'destructive';
-      default:
-        return 'secondary';
+      case 'low': return 'default';
+      case 'medium': return 'secondary';
+      case 'high': return 'destructive';
+      case 'critical': return 'destructive';
+      default: return 'secondary';
     }
   };
 
   const getSeverityText = (severity: string) => {
     switch (severity) {
-      case 'low':
-        return 'Thấp';
-      case 'medium':
-        return 'Trung bình';
-      case 'high':
-        return 'Cao';
-      case 'critical':
-        return 'Nghiêm trọng';
-      default:
-        return 'Không xác định';
+      case 'low': return 'Thấp';
+      case 'medium': return 'Trung bình';
+      case 'high': return 'Cao';
+      case 'critical': return 'Nghiêm trọng';
+      default: return 'Không xác định';
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'open':
-        return 'destructive';
-      case 'in_progress':
-        return 'warning';
-      case 'resolved':
-        return 'default';
-      case 'closed':
-        return 'secondary';
-      default:
-        return 'secondary';
+      case 'open': return 'destructive';
+      case 'in_progress': return 'warning';
+      case 'resolved': return 'default';
+      case 'closed': return 'secondary';
+      default: return 'secondary';
     }
   };
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'open':
-        return 'Chưa xử lý';
-      case 'in_progress':
-        return 'Đang xử lý';
-      case 'resolved':
-        return 'Đã giải quyết';
-      case 'closed':
-        return 'Đã đóng';
-      default:
-        return 'Chờ tiếp nhận';
+      case 'open': return 'Chưa xử lý';
+      case 'in_progress': return 'Đang xử lý';
+      case 'resolved': return 'Đã giải quyết';
+      case 'closed': return 'Đã đóng';
+      default: return 'Chờ tiếp nhận';
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'open':
-        return <AlertTriangle className="h-4 w-4" />;
-      case 'in_progress':
-        return <Clock className="h-4 w-4" />;
+      case 'open': return <AlertTriangle className="h-4 w-4" />;
+      case 'in_progress': return <Clock className="h-4 w-4" />;
       case 'resolved':
-      case 'closed':
-        return <CheckCircle className="h-4 w-4" />;
-      default:
-        return null;
+      case 'closed': return <CheckCircle className="h-4 w-4" />;
+      default: return null;
     }
   };
 
@@ -211,6 +230,7 @@ const ReportIncidentPage = () => {
           <p className="text-muted-foreground">Báo cáo và theo dõi sự cố thiết bị</p>
         </div>
 
+        {/* Report Dialog */}
         <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
           <DialogTrigger asChild>
             <Button className="flex items-center space-x-2">
@@ -227,6 +247,7 @@ const ReportIncidentPage = () => {
             </DialogHeader>
 
             <div className="space-y-4 py-4">
+              {/* Device */}
               <div className="space-y-2">
                 <Label htmlFor="deviceId">Thiết bị gặp sự cố</Label>
                 <Select 
@@ -251,6 +272,7 @@ const ReportIncidentPage = () => {
                 </Select>
               </div>
 
+              {/* Title */}
               <div className="space-y-2">
                 <Label htmlFor="title">Tiêu đề sự cố</Label>
                 <Input
@@ -261,6 +283,7 @@ const ReportIncidentPage = () => {
                 />
               </div>
 
+              {/* Severity */}
               <div className="space-y-2">
                 <Label htmlFor="severity">Mức độ nghiêm trọng</Label>
                 <Select 
@@ -279,6 +302,7 @@ const ReportIncidentPage = () => {
                 </Select>
               </div>
 
+              {/* Location */}
               <div className="space-y-2">
                 <Label htmlFor="location">Vị trí sự cố</Label>
                 <Input
@@ -289,6 +313,7 @@ const ReportIncidentPage = () => {
                 />
               </div>
 
+              {/* Description */}
               <div className="space-y-2">
                 <Label htmlFor="description">Mô tả chi tiết</Label>
                 <Textarea
@@ -299,7 +324,43 @@ const ReportIncidentPage = () => {
                   rows={4}
                 />
               </div>
-            </div>
+
+              {/* Upload Evidence */}
+             {/* Upload Evidence */}
+              <div className="space-y-2">
+                <Label htmlFor="evidence">Minh chứng (ảnh hoặc video)</Label>
+                <Input
+                  id="evidence"
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  onChange={handleFileChange}
+                  disabled={uploading}
+                />
+                {uploading && <p className="text-sm text-muted-foreground">Đang tải file...</p>}
+
+                <div className="flex gap-2 flex-wrap mt-2">
+                  {newIncident.evidenceUrls.map((url, index) => (
+                    <div key={index} className="relative">
+                      {url.match(/\.(mp4|webm|ogg)$/i) ? (
+                        <video
+                          src={url}
+                          controls
+                          className="h-24 w-32 rounded border object-cover"
+                        />
+                      ) : (
+                        <img
+                          src={url}
+                          alt={`evidence-${index}`}
+                          className="h-24 w-24 object-cover rounded border"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              </div>
+
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsReportDialogOpen(false)}>
@@ -307,7 +368,7 @@ const ReportIncidentPage = () => {
               </Button>
               <Button 
                 onClick={handleSubmitIncident}
-                disabled={!newIncident.deviceId || !newIncident.title || !newIncident.description}
+                disabled={!newIncident.deviceId || !newIncident.title || !newIncident.description || uploading}
               >
                 Gửi báo cáo
               </Button>

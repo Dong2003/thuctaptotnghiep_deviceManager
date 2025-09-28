@@ -10,12 +10,12 @@ async function createFirstAdmin() {
 
     console.log("✅ User created:", user.uid);
 
-    await auth.setCustomUserClaims(user.uid, { role: "admin" });
+    await auth.setCustomUserClaims(user.uid, { role: "center" });
 
     await db.collection("users").doc(user.uid).set({
       email: user.email,
       displayName: user.displayName,
-      role: "admin",
+      role: "center",
       createdAt: new Date(),
     });
 

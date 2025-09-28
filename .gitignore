@@ -11,7 +11,13 @@ node_modules
 dist
 dist-ssr
 *.local
-
+# Firebase Admin SDK keys
+serviceAccountKey.json
+*.serviceAccount.json
+*.firebaseAdmin.js
+*.firebaseAdmin.ts
+createAdmin.js
+createAdmin.ts
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
