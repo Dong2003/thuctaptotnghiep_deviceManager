@@ -170,7 +170,7 @@ const ReportIncidentPage = () => {
       case 'closed':
         return 'Đã đóng';
       default:
-        return 'Không xác định';
+        return 'Chờ tiếp nhận';
     }
   };
 
@@ -545,7 +545,7 @@ const ReportIncidentPage = () => {
               <div>
                 <h4 className="font-medium mb-2">Thiết bị liên quan:</h4>
                 <div className="p-3 bg-muted rounded-md">
-                  <p className="text-sm font-medium">{selectedIncident.deviceName || 'Không xác định'}</p>
+                  <p className="text-sm font-medium">{selectedIncident.deviceName || 'Chưa tìm thấy tên thiết bị trong hệ thống'}</p>
                   <p className="text-sm text-muted-foreground">{selectedIncident.location}</p>
                 </div>
               </div>

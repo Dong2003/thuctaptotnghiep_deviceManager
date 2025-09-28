@@ -19,6 +19,8 @@ const Register: React.FC = () => {
   const navigate = useNavigate();
   const defaultPassword = '123456';
 
+  const [loading, setLoading] = useState(false);
+
   // Load wards
   useEffect(() => {
     const fetchWards = async () => {
@@ -40,7 +42,7 @@ const Register: React.FC = () => {
       toast({ title: 'Lỗi', description: 'Vui lòng điền đầy đủ thông tin', variant: 'destructive' });
       return;
     }
-  
+    setLoading(true);
     try {
       // 1. Tạo tài khoản Firebase Auth + Firestore users
       const createdUser = await register({
@@ -53,7 +55,8 @@ const Register: React.FC = () => {
   
       const userId = createdUser.id; // uid từ Firestore user
       const wardName = wards.find(w => w.id === wardId)?.name || `Ward ${wardId}`;
-  
+      const roomId = "";
+      const roomName = "";
       // 2. Lưu vào wardUsers
       await addWardUser(
         wardId,
@@ -61,7 +64,9 @@ const Register: React.FC = () => {
         userId,
         displayName,
         email,
-        role
+        role,
+        roomId,
+        roomName,
       );
   
       toast({
@@ -72,6 +77,8 @@ const Register: React.FC = () => {
       navigate('/login');
     } catch (err: any) {
       toast({ title: 'Lỗi', description: err.message, variant: 'destructive' });
+    }finally {
+      setLoading(false); // ✅ tắt loading
     }
   };
 
@@ -119,7 +126,9 @@ const Register: React.FC = () => {
               <Label>Mật khẩu mặc định</Label>
               <Input type="text" value={defaultPassword} disabled />
             </div>
-            <Button type="submit" className="w-full">Tạo tài khoản</Button>
+                        <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
+            </Button>
           </form>
         </CardContent>
       </Card>

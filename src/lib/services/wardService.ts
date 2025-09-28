@@ -238,7 +238,11 @@ export const addWardUser = async (
   userId: string,
   userName: string,
   userEmail: string,
-  role: 'ward' | 'user'
+  
+
+  role: 'ward' | 'user',
+    roomId: string = "",
+  roomName: string = ""
 ): Promise<string> => {
   try {
     const wardUserData = {
@@ -248,6 +252,8 @@ export const addWardUser = async (
       userName,
       userEmail,
       role,
+      roomId ,
+      roomName  ,
       isActive: true,
       joinedAt: new Date(),
       createdAt: new Date(),

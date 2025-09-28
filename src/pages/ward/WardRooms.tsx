@@ -23,6 +23,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, Edit, Trash2, ChevronDown, ChevronUp } from "lucide-react";
@@ -55,6 +67,7 @@ export default function WardRooms() {
 
   const [rooms, setRooms] = useState<WardRoom[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingRoom, setLoadingRoom] = useState(false);
 
   // dialog thêm/sửa phòng
   const [openRoomDialog, setOpenRoomDialog] = useState(false);
@@ -68,10 +81,13 @@ export default function WardRooms() {
 
   // dialog gán user
   const [openUserDialog, setOpenUserDialog] = useState(false);
+  // state
+  const [savingRoom, setSavingRoom] = useState(false);
+  const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
   const [users, setUsers] = useState<WardUser[]>([]);
 
   const [selectedRoom, setSelectedRoom] = useState<WardRoom | null>(null);
-const [availableUsers, setAvailableUsers] = useState<WardUser[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<WardUser[]>([]);
 
 
   const { toast } = useToast();
@@ -108,40 +124,42 @@ const [availableUsers, setAvailableUsers] = useState<WardUser[]>([]);
   }, [wardId]);
 
   const handleSaveRoom = async () => {
-    if (!wardId) return;
-    setLoading(true);
-    try {
-      if (editingRoom) {
-        await updateWardRoom(editingRoom.id, { name, description });
-        toast({ title: "Cập nhật phòng thành công" });
-      } else {
-        await addWardRoom(wardId, name, description);
-        toast({ title: "Thêm phòng thành công" });
-      }
-      setOpenRoomDialog(false);
-      setEditingRoom(null);
-      setName("");
-      setDescription("");
-      fetchRooms();
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    } finally {
-      setLoading(false);
+  if (!wardId) return;
+  setSavingRoom(true);
+  try {
+    if (editingRoom) {
+      await updateWardRoom(editingRoom.id, { name, description });
+      toast({ title: "Cập nhật phòng thành công" });
+    } else {
+      await addWardRoom(wardId, name, description);
+      toast({ title: "Thêm phòng thành công" });
     }
-  };
+    setOpenRoomDialog(false);
+    setEditingRoom(null);
+    setName("");
+    setDescription("");
+    fetchRooms();
+  } catch (err: any) {
+    toast({ title: "Error", description: err.message, variant: "destructive" });
+  } finally {
+    setSavingRoom(false);
+  }
+};
+
 
   const handleDeleteRoom = async (id: string) => {
-    setLoading(true);
-    try {
-      await deleteWardRoom(id);
-      toast({ title: "Xóa phòng thành công" });
-      fetchRooms();
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  };
+  setDeletingRoomId(id);
+  try {
+    await deleteWardRoom(id);
+    toast({ title: "Xóa phòng thành công" });
+    fetchRooms();
+  } catch (err: any) {
+    toast({ title: "Error", description: err.message, variant: "destructive" });
+  } finally {
+    setDeletingRoomId(null);
+  }
+};
+
 
 
 
@@ -202,11 +220,12 @@ const [availableUsers, setAvailableUsers] = useState<WardUser[]>([]);
                 />
               </div>
             </div>
-            <DialogFooter>
-              <Button onClick={handleSaveRoom}>
-                {editingRoom ? "Cập nhật" : "Thêm"}
-              </Button>
-            </DialogFooter>
+          <DialogFooter>
+            <Button onClick={handleSaveRoom} disabled={savingRoom}>
+              {savingRoom ? "Đang lưu..." : editingRoom ? "Cập nhật" : "Thêm"}
+            </Button>
+          </DialogFooter>
+ 
           </DialogContent>
         </Dialog>
       </CardHeader>
@@ -264,13 +283,29 @@ const [availableUsers, setAvailableUsers] = useState<WardUser[]>([]);
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDeleteRoom(room.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="sm">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Bạn có chắc muốn xóa?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Hành động này sẽ xóa phòng <b>{room.name}</b>. Không thể hoàn tác!
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Hủy</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDeleteRoom(room.id)}>
+                            Xóa
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+
+
                     </TableCell>
                   </TableRow>
 

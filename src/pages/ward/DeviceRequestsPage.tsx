@@ -28,6 +28,7 @@ const DeviceRequestsPage: React.FC = () => {
   const [requests, setRequests] = useState<DeviceRequest[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
 
   const [newRequest, setNewRequest] = useState({
@@ -131,7 +132,7 @@ const DeviceRequestsPage: React.FC = () => {
         text: 'Vui lòng nhập lý do yêu cầu',
       });
     }
-
+     setSubmitting(true); // bật loading
     try {
       const ward = await getWardById(user?.wardId || '');
       if (!ward) throw new Error('Không tìm thấy thông tin phường');
@@ -175,7 +176,8 @@ const DeviceRequestsPage: React.FC = () => {
       MySwal.fire({
         icon: 'success',
         title: 'Gửi yêu cầu thành công',
-        text: `Yêu cầu đã được gửi với ID: ${requestId}`,
+        text: `Yêu cầu đã được gửi trung tâm`,
+        timer:2000,
       });
     } catch (error: any) {
       MySwal.fire({
@@ -184,6 +186,7 @@ const DeviceRequestsPage: React.FC = () => {
         text: error.message,
       });
     }
+     setSubmitting(false);
   };
 
   // -------------------- Render -------------------- //
@@ -269,8 +272,8 @@ const DeviceRequestsPage: React.FC = () => {
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Hủy</Button>
-              <Button onClick={handleSubmitRequest} disabled={!newRequest.reason.trim()}>
-                Gửi yêu cầu
+              <Button onClick={handleSubmitRequest} disabled={submitting}>
+              {submitting ? "Đang gửi..." : "Gửi yêu cầu"}
               </Button>
             </DialogFooter>
           </DialogContent>
