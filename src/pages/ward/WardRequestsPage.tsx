@@ -4,14 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { CheckCircle, Package, Clock, FileText, Eye, Monitor, HardDrive, Cpu, MemoryStick } from 'lucide-react';
+import { CheckCircle, Package, Clock, FileText, Eye, Monitor, HardDrive, Cpu, MemoryStick, Trash2, Trash } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { DeviceRequest, getDeviceRequests, updateDeviceRequest, getDeviceTypeDisplayName } from '@/lib/services/deviceRequestService';
+import { DeviceRequest, getDeviceRequests, updateDeviceRequest, deleteDeviceRequest, getDeviceTypeDisplayName, markDeviceRequestUpdateAsViewed } from '@/lib/services/deviceRequestService';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDevices, Device } from '@/lib/services/deviceService';
-import { FIELD_META, getFieldsForType } from '@/components/SpecEditor';
+import { FIELD_META, getFieldsForType, getCpuOptionsByType, getGpuOptionsByType } from '@/components/SpecEditor';
 
 const WardRequestsPage = () => {
   const [requests, setRequests] = useState<DeviceRequest[]>([]);
@@ -19,6 +20,9 @@ const WardRequestsPage = () => {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [confirmNotes, setConfirmNotes] = useState('');
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
+  const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
   const [allocatedDevices, setAllocatedDevices] = useState<Device[]>([]);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -31,16 +35,31 @@ const WardRequestsPage = () => {
 
 const fetchRequests = async () => {
   try {
+    console.log("=== STARTING FETCH REQUESTS ===");
+    console.log("User wardId:", user?.wardId);
+
     const allRequests = await getDeviceRequests(user?.wardId);
-    // Hiển thị các yêu cầu từ "Đang giao" đến "Đã nhận"
+
+    console.log("=== FETCHED ALL REQUESTS ===");
+    console.log("All requests:", allRequests);
+    console.log("All requests length:", allRequests.length);
+
+    // 🔹 Nếu chỉ test thì lấy hết, còn chạy thật thì lọc theo status
     const filteredRequests = allRequests.filter(
       (r) => r.status === "delivering" || r.status === "received"
     );
-    setRequests(filteredRequests);
-  } catch (error: any) {
-    console.error("❌ Firestore error:", error);
 
-    // Nếu lỗi do thiếu index thì log ra link tạo index
+    console.log("=== FILTERED REQUESTS ===");
+    console.log("Filtered requests:", filteredRequests);
+    console.log("Filtered requests length:", filteredRequests.length);
+
+    setRequests(filteredRequests);
+    console.log("=== REQUESTS SET TO STATE ===");
+  } catch (error: any) {
+    console.error("=== ERROR IN FETCH REQUESTS ===");
+    console.error("Error:", error);
+
+    // Nếu lỗi do thiếu index thì log link tạo index
     if (error.code === "failed-precondition") {
       const match = error.message.match(
         /https:\/\/console\.firebase\.google\.com\/[^\s]+/
@@ -58,6 +77,7 @@ const fetchRequests = async () => {
     });
   }
 };
+
 
 
   const getStatusColor = (status: string) => {
@@ -118,6 +138,10 @@ const fetchRequests = async () => {
         receivedBy: user?.displayName || 'Người dùng',
         receivedAt: new Date(),
         notes: confirmNotes,
+      }, {
+        id: user?.id || '',
+        name: user?.displayName || 'Phường',
+        role: 'ward'
       });
       
       toast({ 
@@ -132,42 +156,142 @@ const fetchRequests = async () => {
     }
   };
 
-  // Hàm mở dialog chi tiết thiết bị
-  const openDetailDialog = async (request: DeviceRequest) => {
+  // Hàm mở dialog xóa
+  const openDeleteDialog = (request: DeviceRequest) => {
+    setSelectedRequest(request);
+    setIsDeleteDialogOpen(true);
+  };
+
+  // Hàm xóa yêu cầu
+  const handleDeleteRequest = async () => {
+    if (!selectedRequest) return;
+    
     try {
-      setSelectedRequest(request);
-      
-      // Lấy thông tin chi tiết các thiết bị được cấp phát
-      if (request.deviceSerialNumbers && request.deviceSerialNumbers.length > 0) {
-        const allDevices = await getDevices();
-        const devices = allDevices.filter(device => 
-          request.deviceSerialNumbers!.includes(device.id)
-        );
-        
-        // Nếu có thông tin số lượng, tạo danh sách thiết bị với số lượng
-        if (request.deviceQuantities) {
-          const devicesWithQuantity: Device[] = [];
-          devices.forEach(device => {
-            const quantity = request.deviceQuantities![device.id] || 1;
-            // Tạo một thiết bị với thông tin số lượng
-            const deviceWithQuantity = {
-              ...device,
-              // Thêm thông tin số lượng vào tên thiết bị để hiển thị
-              name: `${device.name} (x${quantity})`
-            };
-            devicesWithQuantity.push(deviceWithQuantity);
-          });
-          setAllocatedDevices(devicesWithQuantity);
-        } else {
-          setAllocatedDevices(devices);
-        }
-      } else {
-        setAllocatedDevices([]);
-      }
-      
-      setIsDetailDialogOpen(true);
+      await deleteDeviceRequest(selectedRequest.id, user?.id || '', user?.role || 'ward');
+      setRequests(prev => prev.filter(r => r.id !== selectedRequest.id));
+      toast({ title: 'Xóa thành công', description: 'Yêu cầu đã được xóa khỏi hệ thống.' });
+      setIsDeleteDialogOpen(false);
+      setSelectedRequest(null);
     } catch (error: any) {
       toast({ title: 'Lỗi', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  // Bulk delete functions
+  const handleSelectRequest = (requestId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedRequests(prev => [...prev, requestId]);
+    } else {
+      setSelectedRequests(prev => prev.filter(id => id !== requestId));
+    }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const deletableRequests = requests.filter(request => 
+        request.status === 'completed' || 
+        request.status === 'rejected'
+      );
+      setSelectedRequests(deletableRequests.map(r => r.id));
+    } else {
+      setSelectedRequests([]);
+    }
+  };
+
+  const openBulkDeleteDialog = () => {
+    if (selectedRequests.length === 0) {
+      toast({
+        title: 'Chưa chọn yêu cầu',
+        description: 'Vui lòng chọn ít nhất một yêu cầu để xóa.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    setIsBulkDeleteDialogOpen(true);
+  };
+
+  const handleBulkDelete = async () => {
+    try {
+      const deletePromises = selectedRequests.map(id => deleteDeviceRequest(id, user?.id || '', user?.role || 'ward'));
+      await Promise.all(deletePromises);
+      
+      setRequests(prev => prev.filter(r => !selectedRequests.includes(r.id)));
+      setSelectedRequests([]);
+      toast({ 
+        title: 'Xóa thành công', 
+        description: `Đã xóa ${selectedRequests.length} yêu cầu.` 
+      });
+      setIsBulkDeleteDialogOpen(false);
+    } catch (error: any) {
+      toast({ 
+        title: 'Lỗi', 
+        description: error.message || 'Không thể xóa yêu cầu', 
+        variant: 'destructive' 
+      });
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    const deletableRequests = requests.filter(request => 
+      request.status === 'completed' || 
+      request.status === 'rejected'
+    );
+    
+    if (deletableRequests.length === 0) {
+      toast({
+        title: 'Không có yêu cầu để xóa',
+        description: 'Không có yêu cầu nào có thể xóa.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      const deletePromises = deletableRequests.map(request => deleteDeviceRequest(request.id, user?.id || '', user?.role || 'ward'));
+      await Promise.all(deletePromises);
+      
+      setRequests(prev => prev.filter(r => 
+        r.status !== 'completed' && 
+        r.status !== 'rejected'
+      ));
+      setSelectedRequests([]);
+      toast({ 
+        title: 'Xóa thành công', 
+        description: `Đã xóa tất cả ${deletableRequests.length} yêu cầu.` 
+      });
+    } catch (error: any) {
+      toast({ 
+        title: 'Lỗi', 
+        description: error.message || 'Không thể xóa yêu cầu', 
+        variant: 'destructive' 
+      });
+    }
+  };
+
+  // Hàm mở dialog chi tiết thiết bị
+  const openDetailDialog = async (request: DeviceRequest) => {
+    console.log('=== OPEN DETAIL DIALOG ===');
+    console.log('Request ID:', request.id);
+    console.log('Current isDetailDialogOpen:', isDetailDialogOpen);
+    console.log('Current selectedRequest:', selectedRequest);
+    
+    setSelectedRequest(request);
+    setIsDetailDialogOpen(true);
+    
+    console.log('After setting state:');
+    console.log('selectedRequest set to:', request);
+    console.log('isDetailDialogOpen set to: true');
+    
+    // Đánh dấu đã xem cập nhật mới nếu có
+    if (request.hasNewUpdate) {
+      try {
+        await markDeviceRequestUpdateAsViewed(request.id);
+        setRequests(prev => prev.map(r => 
+          r.id === request.id ? { ...r, hasNewUpdate: false } : r
+        ));
+      } catch (error) {
+        console.error('Error marking device request update as viewed:', error);
+      }
     }
   };
 
@@ -228,9 +352,43 @@ const fetchRequests = async () => {
           <CardTitle>Danh sách thiết bị cần nhận ({requests.length})</CardTitle>
         </CardHeader>
         <CardContent>
+          {/* Bulk Actions */}
+          {requests.length > 0 && (
+            <div className="flex items-center gap-2 mb-4 p-3 bg-muted rounded-lg">
+              <Checkbox
+                checked={selectedRequests.length > 0}
+                onCheckedChange={handleSelectAll}
+              />
+              <span className="text-sm text-muted-foreground">
+                {selectedRequests.length > 0 ? `Đã chọn ${selectedRequests.length} yêu cầu` : 'Chọn tất cả'}
+              </span>
+              {selectedRequests.length > 0 && (
+                <div className="flex gap-2 ml-auto">
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={openBulkDeleteDialog}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Xóa đã chọn
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleDeleteAll}
+                  >
+                    <Trash className="h-4 w-4 mr-2" />
+                    Xóa tất cả
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">Chọn</TableHead>
                 <TableHead>Loại thiết bị</TableHead>
                 <TableHead>Số lượng</TableHead>
                 <TableHead>Lý do</TableHead>
@@ -241,28 +399,54 @@ const fetchRequests = async () => {
             </TableHeader>
             <TableBody>
               {requests.map((request) => (
-                <TableRow key={request.id}>
-                  <TableCell>{getDeviceTypeDisplayName(request.deviceType)}</TableCell>
+                <TableRow 
+                  key={request.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => {
+                    console.log('ROW CLICKED!', request.id);
+                    openDetailDialog(request);
+                  }}
+                >
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={selectedRequests.includes(request.id)}
+                      onCheckedChange={(checked) => handleSelectRequest(request.id, checked as boolean)}
+                      disabled={request.status !== 'completed' && request.status !== 'rejected'}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span>{getDeviceTypeDisplayName(request.deviceType)}</span>
+                      {request.hasNewUpdate && request.lastUpdateByRole === 'center' && (
+                        <Badge variant="destructive" className="text-xs px-2 py-1 animate-pulse shadow-lg ring-2 ring-red-300 ring-opacity-50">
+                          Có cập nhật mới
+                        </Badge>
+                      )}
+                    </div>
+                    {request.hasNewUpdate && request.lastUpdateByRole === 'center' && request.lastUpdateByName && (
+                      <p className="text-xs text-blue-600 mt-1">
+                        Cập nhật bởi: {request.lastUpdateByName}
+                      </p>
+                    )}
+                  </TableCell>
                   <TableCell>{request.quantity}</TableCell>
                   <TableCell className="max-w-xs truncate">{request.reason}</TableCell>
-                  <TableCell>{request.createdAt.toLocaleDateString('vi-VN')}</TableCell>
+                  <TableCell>
+                    {request.createdAt.toLocaleDateString('vi-VN', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={getStatusColor(request.status) as any}>
                       {getStatusText(request.status)}
                     </Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex gap-2">
-                      {/* Nút Chi tiết */}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openDetailDialog(request)}
-                      >
-                        <Eye className="h-4 w-4 mr-2" />
-                        Chi tiết
-                      </Button>
-                      
                       {/* Nút Xác nhận nhận */}
                       {request.status === 'delivering' && (
                         <Button
@@ -281,6 +465,17 @@ const fetchRequests = async () => {
                           <CheckCircle className="h-4 w-4 mr-1" />
                           Đã nhận: {request.receivedAt?.toLocaleDateString('vi-VN')}
                         </span>
+                      )}
+                      
+                      {/* Nút Xóa - chỉ hiển thị cho các trạng thái đã hoàn thành */}
+                      {(request.status === 'completed' || request.status === 'rejected') && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => openDeleteDialog(request)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       )}
                     </div>
                   </TableCell>
@@ -350,7 +545,7 @@ const fetchRequests = async () => {
       </Dialog>
 
       {/* Device Detail Dialog */}
-      <Dialog open={isDetailDialogOpen} onOpenChange={closeDetailDialog}>
+      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chi tiết thiết bị được cấp phát</DialogTitle>
@@ -411,7 +606,13 @@ const fetchRequests = async () => {
                     <p><strong>Loại thiết bị:</strong> {getDeviceTypeDisplayName(selectedRequest.deviceType)}</p>
                     <p><strong>Số lượng:</strong> {selectedRequest.quantity}</p>
                     <p><strong>Lý do:</strong> {selectedRequest.reason}</p>
-                    <p><strong>Ngày yêu cầu:</strong> {selectedRequest.createdAt.toLocaleDateString('vi-VN')}</p>
+                    <p><strong>Ngày yêu cầu:</strong> {selectedRequest.createdAt.toLocaleDateString('vi-VN', {
+                      day: '2-digit',
+                      month: '2-digit', 
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}</p>
                   </div>
                 </div>
                 <div>
@@ -470,12 +671,24 @@ const fetchRequests = async () => {
                               .filter((k) => k !== 'vendor' && k !== 'description')
                               .map((k) => {
                                 const meta = FIELD_META[k];
-                                const val = (device.specifications as any)?.[k];
-                                if (!meta || val === undefined || val === '') return null;
+                                const rawVal = (device.specifications as any)?.[k];
+                                if (!meta || rawVal === undefined || rawVal === '') return null;
+                                const displayVal =
+                                  k === 'license' || k === 'windowsLicense'
+                                    ? (rawVal === 'licensed' ? 'Có' : rawVal === 'unlicensed' ? 'Không' : String(rawVal))
+                                    : k === 'cpu'
+                                    ? (rawVal === 'other'
+                                        ? ((device.specifications as any)?.cpu_other || 'Khác')
+                                        : (getCpuOptionsByType(device.type).find(o => o.value === rawVal)?.label || String(rawVal)))
+                                    : k === 'gpu'
+                                    ? (rawVal === 'other'
+                                        ? ((device.specifications as any)?.gpu_other || 'Khác')
+                                        : (getGpuOptionsByType(device.type).find(o => o.value === rawVal)?.label || String(rawVal)))
+                                    : String(rawVal);
                                 return (
                                   <div key={k} className="flex items-center">
                                     <span className="text-muted-foreground">{meta.label}:</span>
-                                    <span className="ml-1">{String(val)}</span>
+                                    <span className="ml-1">{displayVal}</span>
                                   </div>
                                 );
                               })}
@@ -510,6 +723,70 @@ const fetchRequests = async () => {
 
           <DialogFooter>
             <Button variant="outline" onClick={closeDetailDialog}>Đóng</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xóa yêu cầu thiết bị</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa yêu cầu này không? Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedRequest && (
+            <div className="py-4">
+              <div className="p-3 bg-muted rounded-md">
+                <p><b>Loại thiết bị:</b> {getDeviceTypeDisplayName(selectedRequest.deviceType)}</p>
+                <p><b>Số lượng:</b> {selectedRequest.quantity}</p>
+                <p><b>Lý do:</b> {selectedRequest.reason}</p>
+                <p><b>Ngày yêu cầu:</b> {selectedRequest.createdAt.toLocaleDateString('vi-VN', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}</p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="space-x-2">
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={handleDeleteRequest}>Xóa</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Dialog */}
+      <Dialog open={isBulkDeleteDialogOpen} onOpenChange={setIsBulkDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xóa nhiều yêu cầu</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa {selectedRequests.length} yêu cầu đã chọn không? Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <div className="max-h-40 overflow-y-auto space-y-2">
+              {selectedRequests.map(id => {
+                const request = requests.find(r => r.id === id);
+                return request ? (
+                  <div key={id} className="p-2 bg-muted rounded text-sm">
+                    <p><b>{getDeviceTypeDisplayName(request.deviceType)}</b> - {request.status}</p>
+                  </div>
+                ) : null;
+              })}
+            </div>
+          </div>
+
+          <DialogFooter className="space-x-2">
+            <Button variant="outline" onClick={() => setIsBulkDeleteDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={handleBulkDelete}>Xóa {selectedRequests.length} yêu cầu</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

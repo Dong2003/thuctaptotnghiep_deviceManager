@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, AuthState, onAuthStateChange, getAuthErrorMessage } from '../lib/authService';
 import { logAuthAction } from '../lib/services/auditLogService';
+import { getClientInfo } from '../lib/utils/ipUtils';
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
@@ -40,7 +41,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setError(null);
       setLoading(true);
       const { login: loginService } = await import('../lib/authService');
-      await loginService({ email, password });
+      const loggedInUser = await loginService({ email, password });
+      
+      // Log login action after successful login
+      try {
+        const clientInfo = await getClientInfo();
+        await logAuthAction(
+          loggedInUser.id,
+          loggedInUser.email,
+          loggedInUser.displayName,
+          loggedInUser.role,
+          'login',
+          clientInfo
+        );
+      } catch (auditError) {
+        console.error('Failed to log login action:', auditError);
+        // Don't throw error to avoid breaking login flow
+      }
     } catch (err: any) {
       const errorMessage = getAuthErrorMessage(err);
       setError(errorMessage);
@@ -61,13 +78,32 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setError(null);
       setLoading(true);
       const { register: registerService } = await import('../lib/authService');
-      await registerService({ 
+      const registeredUser = await registerService({ 
         email, 
         password, 
         displayName, 
         role, 
         wardId 
       });
+      
+      // Log register action after successful registration
+      try {
+        const clientInfo = await getClientInfo();
+        await logAuthAction(
+          registeredUser.id,
+          registeredUser.email,
+          registeredUser.displayName,
+          registeredUser.role,
+          'register',
+          {
+            ...clientInfo,
+            wardId: wardId
+          }
+        );
+      } catch (auditError) {
+        console.error('Failed to log register action:', auditError);
+        // Don't throw error to avoid breaking registration flow
+      }
     } catch (err: any) {
       const errorMessage = getAuthErrorMessage(err);
       setError(errorMessage);
@@ -85,17 +121,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Log logout action before actually logging out
       if (user) {
         try {
+          const clientInfo = await getClientInfo();
           await logAuthAction(
             user.id,
             user.email,
             user.displayName,
             user.role,
             'logout',
-            {
-              ipAddress: 'unknown',
-              userAgent: navigator.userAgent,
-              timestamp: new Date().toISOString()
-            }
+            clientInfo
           );
         } catch (auditError) {
           console.error('Failed to log logout action:', auditError);

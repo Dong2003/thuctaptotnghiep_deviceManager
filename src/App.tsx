@@ -26,6 +26,7 @@ import DeviceRequestsPage from "./pages/ward/DeviceRequestsPage";
 import WardRequestsPage from "./pages/ward/WardRequestsPage";
 import WardUsersPage from "./pages/ward/WardUsersPage";
 import WardIncidentsPage from "./pages/ward/WardIncidentsPage";
+import WardIncidentApprovalPage from "./pages/ward/WardIncidentApprovalPage";
 import Register from "./pages/Register";
 // User pages
 import MyDevicesPage from "./pages/user/MyDevicesPage";
@@ -104,7 +105,10 @@ const App = () => (
             <Route path="/ward-requests" element={<ProtectedRoute><WardRequestsPage /></ProtectedRoute>} />
             <Route path="/ward-users" element={<ProtectedRoute><WardUsersPage /></ProtectedRoute>} />
             <Route path="/ward-incidents" element={<ProtectedRoute><WardIncidentsPage /></ProtectedRoute>} />
+
              <Route path="/ward-rooms" element={<ProtectedRoute><WardRooms /></ProtectedRoute>} />
+            <Route path="/ward-incident-approval" element={<ProtectedRoute><WardIncidentApprovalPage /></ProtectedRoute>} />
+
             
             {/* User Routes */}
             <Route path="/my-devices" element={<ProtectedRoute><MyDevicesPage /></ProtectedRoute>} />
