@@ -64,7 +64,7 @@ import {
 } from "@/lib/services/deviceService";
 import { getWards } from "@/lib/services/wardService";
 import { useToast } from "@/hooks/use-toast";
-
+import Swal from "sweetalert2";
 
 const DevicesPage = () => {
   
@@ -317,32 +317,53 @@ const DevicesPage = () => {
     }
   };
 
-  const handleDeleteDevice = async (deviceId: string) => {
-    try {
-      const target = devices.find((d) => d.id === deviceId);
-      if (target?.assignedTo) {
-        toast({
-          title: "Không thể xóa thiết bị",
-          description: "Thiết bị đang được gán cho người dùng. Hãy thu hồi trước khi xóa.",
-          variant: "destructive",
-        });
-        return;
-      }
-      await deleteDevice(deviceId);
-      setDevices(devices.filter((d) => d.id !== deviceId));
-      toast({
-        title: "Xóa thiết bị thành công",
-        description: "Thiết bị đã được xóa khỏi hệ thống.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Lỗi xóa thiết bị",
-        description: error.message || "Không thể xóa thiết bị",
-        variant: "destructive",
-      });
-    }
-  };
+const handleDeleteDevice = async (deviceId: string) => {
+  const target = devices.find((d) => d.id === deviceId);
 
+  // Nếu thiết bị đang được gán cho user thì không cho xoá
+  if (target?.assignedTo) {
+    Swal.fire({
+      icon: "error",
+      title: "Không thể xóa thiết bị",
+      text: "Thiết bị đang được gán cho người dùng. Hãy thu hồi trước khi xóa.",
+      confirmButtonText: "OK",
+    });
+    return;
+  }
+
+  // Hỏi xác nhận trước khi xoá
+  const result = await Swal.fire({
+    title: "Xác nhận xóa",
+    text: `Bạn có chắc chắn muốn xóa thiết bị "${target?.name}"?`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonColor: "#d33",
+    cancelButtonColor: "#3085d6",
+    confirmButtonText: "Xóa",
+    cancelButtonText: "Hủy",
+  });
+
+  if (!result.isConfirmed) return;
+
+  try {
+    await deleteDevice(deviceId);
+    setDevices(devices.filter((d) => d.id !== deviceId));
+
+    Swal.fire({
+      icon: "success",
+      title: "Xóa thiết bị thành công",
+      text: "Thiết bị đã được xóa khỏi hệ thống.",
+      timer: 2000,
+      showConfirmButton: false,
+    });
+  } catch (error: any) {
+    Swal.fire({
+      icon: "error",
+      title: "Lỗi xóa thiết bị",
+      text: error.message || "Không thể xóa thiết bị.",
+    });
+  }
+};
   const getDeviceTypeDisplayName = (type: string) => {
     switch (type) {
       case "pc":

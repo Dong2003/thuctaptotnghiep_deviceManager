@@ -13,7 +13,7 @@ import { Plus, Search, Edit, Trash2, Users, UserCheck, UserX } from "lucide-reac
 import { useToast } from "@/hooks/use-toast";
 import { getWardUsers, addWardUser, updateWardUser, deleteWardUser,assignUserToRoom ,getWardRooms } from "@/lib/services/wardService";
 import { useAuth } from "@/contexts/AuthContext";
-
+import Swal from "sweetalert2";
 import type { WardUser } from "@/lib/services/wardService";
 import type { WardRoom } from "@/lib/services/wardRoomService";
 
@@ -110,15 +110,28 @@ const WardUsersPage = () => {
     }
   };
 
-  const handleDeleteUser = async (u: WardUser) => {
-    try {
-      await deleteWardUser(wardId!, u.id);
-      setUsers(users.filter(user => user.id !== u.id));
-      toast({ title: "Xóa thành công", description: `${u.userName} đã bị xóa` });
-    } catch {
-      toast({ title: "Lỗi", description: "Không thể xóa người dùng", variant: "destructive" });
-    }
-  };
+const handleDeleteUser = async (u: WardUser) => {
+  const result = await Swal.fire({
+    title: "Xác nhận xóa",
+    text: `Bạn có chắc chắn muốn xóa ${u.userName}?`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonColor: "#d33",
+    cancelButtonColor: "#3085d6",
+    confirmButtonText: "Xóa",
+    cancelButtonText: "Hủy",
+  });
+
+  if (!result.isConfirmed) return; // Nếu bấm Hủy thì dừng
+
+  try {
+    await deleteWardUser(wardId!, u.id);
+    setUsers(users.filter(user => user.id !== u.id));
+    Swal.fire("Đã xóa!", `${u.userName} đã bị xóa thành công.`, "success");
+  } catch {
+    Swal.fire("Lỗi!", "Không thể xóa người dùng.", "error");
+  }
+};
 
   const roleDisplay = (role: "ward" | "user") => (role === "ward" ? "Quản lý Ward" : "Người dùng thiết bị");
   const roleColor = (role: "ward" | "user") => (role === "ward" ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800");

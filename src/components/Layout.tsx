@@ -513,11 +513,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         return [
           ...baseItems,
           { path: '/ward-devices', label: 'Thiết bị phường', icon: Monitor },
-          { path: '/device-requests', label: 'Yêu cầu thiết bị', icon: Package },
-          { path: '/ward-requests', label: 'Nhận thiết bị', icon: CheckCircle },
-          { path: '/ward-rooms', label: 'Phòng ban', icon: FileText  },
           { path: '/device-requests', label: 'Yêu cầu thiết bị', icon: Package, badge: wardDeviceRequestNotificationCount > 0 ? wardDeviceRequestNotificationCount : undefined },
           { path: '/ward-requests', label: 'Nhận thiết bị', icon: CheckCircle, badge: wardRequestNotificationCount > 0 ? wardRequestNotificationCount : undefined },
+          { path: '/ward-rooms', label: 'Phòng ban', icon: FileText  },
+
 
           { path: '/ward-users', label: 'Quản lý người dùng', icon: Users },
           { path: '/ward-incidents', label: 'Sự cố thiết bị', icon: AlertTriangle, badge: wardIncidentNotificationCount > 0 ? wardIncidentNotificationCount : undefined },

@@ -501,26 +501,35 @@ const ReportIncidentPage = () => {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="deviceId">Thiết bị gặp sự cố</Label>
-                <Select 
-                  value={newIncident.deviceId} 
-                  onValueChange={(value) => setNewIncident({...newIncident, deviceId: value})}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn thiết bị" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {devices.map((device) => (
-                      <SelectItem key={device.id} value={device.id}>
-                        <div>
-                          <p className="font-medium">{device.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {device.specifications?.brand} {device.specifications?.model}
-                          </p>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+<Select 
+  value={newIncident.deviceId} 
+  onValueChange={(value) => setNewIncident({...newIncident, deviceId: value})}
+>
+  <SelectTrigger>
+    <SelectValue placeholder="Chọn thiết bị" />
+  </SelectTrigger>
+  <SelectContent>
+    {devices.filter(device => device.assignedTo === user.id).length === 0 ? (
+      <SelectItem value="none" disabled>
+        Không có thiết bị
+      </SelectItem>
+    ) : (
+      devices
+        .filter(device => device.assignedTo === user.id)
+        .map((device) => (
+          <SelectItem key={device.id} value={device.id}>
+            <div>
+              <p className="font-medium">{device.name}</p>
+              <p className="text-sm text-muted-foreground">
+                {device.specifications?.brand} {device.specifications?.model}
+              </p>
+            </div>
+          </SelectItem>
+        ))
+    )}
+  </SelectContent>
+</Select>
+
               </div>
 
               <div className="space-y-2">

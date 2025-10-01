@@ -82,58 +82,72 @@ const Register: React.FC = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-elevation">
-        <CardHeader>
-          <CardTitle>Đăng ký tài khoản mới</CardTitle>
-          <CardDescription>Cấp phát tài khoản cho phường hoặc người dùng</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <Label>Email</Label>
-              <Input value={email} onChange={(e) => setEmail(e.target.value)} required />
-            </div>
-            <div>
-              <Label>Tên hiển thị</Label>
-              <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
-            </div>
-            <div>
-              <Label>Vai trò</Label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as 'ward' | 'user')}
-                className="w-full border rounded px-2 py-1"
-              >
-                <option value="ward">Phường</option>
-                <option value="user">Người dùng</option>
-              </select>
-            </div>
-            <div>
-              <Label>Chọn phường</Label>
-              <select
-                value={wardId}
-                onChange={(e) => setWardId(e.target.value)}
-                className="w-full border rounded px-2 py-1"
-              >
-                {wards.map(w => (
-                  <option key={w.id} value={w.id}>{getWardDisplayName(w)}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label>Mật khẩu mặc định</Label>
-              <Input type="text" value={defaultPassword} disabled />
-            </div>
-                        <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
+return (
+  <div className="min-h-screen flex items-center justify-center p-4">
+    <Card className="w-full max-w-md shadow-elevation">
+      <CardHeader>
+        <CardTitle>Đăng ký tài khoản mới</CardTitle>
+        <CardDescription>Cấp phát tài khoản cho phường hoặc người dùng</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label>Email</Label>
+            <Input value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </div>
+          <div>
+            <Label>Tên hiển thị</Label>
+            <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
+          </div>
+          <div>
+            <Label>Vai trò</Label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as 'ward' | 'user')}
+              className="w-full border rounded px-2 py-1"
+            >
+              <option value="ward">Phường</option>
+              <option value="user">Người dùng</option>
+            </select>
+          </div>
+          <div>
+            <Label>Chọn phường</Label>
+            <select
+              value={wardId}
+              onChange={(e) => setWardId(e.target.value)}
+              className="w-full border rounded px-2 py-1"
+            >
+              {wards.map(w => (
+                <option key={w.id} value={w.id}>{getWardDisplayName(w)}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label>Mật khẩu mặc định</Label>
+            <Input type="text" value={defaultPassword} disabled />
+          </div>
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
+          </Button>
+        </form>
+
+        {/* ✅ Nút chuyển qua đăng nhập */}
+        <div className="text-center mt-4">
+          <span className="text-sm text-gray-600">
+            Đã có tài khoản?{" "}
+            <button
+              type="button"
+              onClick={() => navigate('/login')}
+              className="text-blue-600 hover:underline"
+            >
+              Đăng nhập
+            </button>
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  </div>
+);
+}
 
 export default Register;
