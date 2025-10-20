@@ -18,7 +18,7 @@ Những công việc đã được giao và hoàn thành khi thực tập:
   - Phát triển quy trình cấp phát: Hoàn thiện chức năng tiếp nhận yêu cầu, tạo phiếu phân phát và theo dõi trạng thái.
   - Xây dựng chức năng báo cáo thống kê toàn hệ thống.
   - Thiết kế chức năng ghi nhận thao tác người dùng.
-  - Chức năng duyệt báo cáo sự cố thiết bị và log thao tác người dùng.
+  - Chức năng duyệt báo cáo sự cố thiết bị.
 
 Một số hình ảnh của dự án:
   - Giao diện Website - Quản lý trang thiết bị công nghệ thông tin của các chức năng tôi đã làm:
