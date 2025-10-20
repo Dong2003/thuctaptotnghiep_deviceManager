@@ -5,7 +5,7 @@ async function createFirstAdmin() {
     const user = await auth.createUser({
       email: "admin@gmail.com",
       password: "123456",
-      displayName: "Super Admin Anh",
+      displayName: "Super Admin",
     });
 
     console.log("✅ User created:", user.uid);
