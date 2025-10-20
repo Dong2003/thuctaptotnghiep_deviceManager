@@ -1,4 +1,4 @@
-<img width="887" height="105" alt="image" src="https://github.com/user-attachments/assets/cf609fe4-4ecf-4b25-8cc2-7088be7b3ce2" /><img width="1180" height="105" alt="image" src="https://github.com/user-attachments/assets/546542fb-5c67-4198-b755-5f20316c4d8a" /># Website - Quản lý trang thiết bị công nghệ thông tin
+# Website - Quản lý trang thiết bị công nghệ thông tin
 Đề tài thực tập tốt nghiệp:
   - Đây là đề tài nhóm gồm 5 người
   - Người thực hiện: Nguyễn Mậu Đông
@@ -23,7 +23,7 @@ Những công việc đã được giao và hoàn thành khi thực tập:
 Một số hình ảnh của dự án:
   - Giao diện website
 
-<img width="1192" height="1037" alt="image" src="https://github.com/user-attachments/assets/4ef378ff-2c44-4982-9706-ecaaf179b0cd" />
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/4ef378ff-2c44-4982-9706-ecaaf179b0cd" />
 
 <img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/0f797054-f98c-44f8-889c-6245c42b20b9" />
 <img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/30d00989-2cba-4fee-a07f-fbab36b5d141" />
