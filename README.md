@@ -24,24 +24,16 @@ Một số hình ảnh của dự án:
   - Giao diện website
 
 <img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/4ef378ff-2c44-4982-9706-ecaaf179b0cd" />
-
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/0f797054-f98c-44f8-889c-6245c42b20b9" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/30d00989-2cba-4fee-a07f-fbab36b5d141" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/7c551321-4eaf-4c37-bd2d-83ca42f4f71f" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/3ec2ae25-a9e1-4748-a02c-3782a42fe2e2" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/a643b5b5-f34b-445c-8752-d20638388365" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/f514d09b-5e24-4c52-971d-8dd0cae96d9a" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/971cde3b-25c9-4daa-89ca-7599a10e1de9" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/8a51fb32-5008-4dc2-a9d7-a07ae4487b00" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/c6772eae-f8c5-4d47-ae3a-59c248752fac" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/2359dd6b-2ba8-4ac0-80ea-3ffef15f9373" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/ce988abf-6e44-47be-acf0-9dbf3dc5ed01" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/4888a939-7fc5-475c-865a-e3efed540bfa" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/275df88c-eddd-4e86-a214-1d99302ea643" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/c37241a6-1eaa-4743-9a0e-55341690f88b" />
-
-
-
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/40d2860e-160c-4aca-98ea-7079fe73498c" />
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/265731d1-0a66-4e33-9d7b-aee68694ea40" />
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/05692126-e6a0-41e1-81fd-820ab79a4ab2" />
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/e70f6eba-b223-4776-9b81-0c34db9445ed" />
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/f72d9b4f-dc6f-4eb1-a37a-149823130464" />
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/12003c00-44f2-4330-ba69-a7bcef3ff10d" />
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/e12c85a6-33d4-4dd4-9771-5e3d55b6e1b8" />
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/be79dcb0-334c-46a5-84b7-ca7d58aa971c" />
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/e4a38810-031f-42d6-a763-5484786bde5e" />
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/c707c2bb-2285-4d4a-bb86-e1fda51fe24f" />
 
 - Các tính năng chính
     - Quản lý danh mục
