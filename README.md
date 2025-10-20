@@ -17,47 +17,38 @@ Những công việc đã được giao và hoàn thành khi thực tập:
   - Xây dựng chức năng quản lý: Tạo chức năng cho quản lý cơ sở, nhân sự (staff) và tài khoản người dùng.
   - Phát triển quy trình cấp phát: Hoàn thiện chức năng tiếp nhận yêu cầu, tạo phiếu phân phát và theo dõi trạng thái.
   - Xây dựng chức năng báo cáo thống kê toàn hệ thống.
-  - Thiết kế chức năng ghi nhận thao tác người dùng
-  - Chức năng duyệt báo cáo sự cố thiết bị
+  - Thiết kế chức năng ghi nhận thao tác người dùng.
+  - Chức năng duyệt báo cáo sự cố thiết bị và log thao tác người dùng.
 
 Một số hình ảnh của dự án:
-  - Giao diện website
+  - Giao diện Website - Quản lý trang thiết bị công nghệ thông tin của các chức năng tôi đã làm:
 
 <img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/4ef378ff-2c44-4982-9706-ecaaf179b0cd" />
 <img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/40d2860e-160c-4aca-98ea-7079fe73498c" />
 <img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/265731d1-0a66-4e33-9d7b-aee68694ea40" />
 <img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/05692126-e6a0-41e1-81fd-820ab79a4ab2" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/e70f6eba-b223-4776-9b81-0c34db9445ed" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/f72d9b4f-dc6f-4eb1-a37a-149823130464" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/12003c00-44f2-4330-ba69-a7bcef3ff10d" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/e12c85a6-33d4-4dd4-9771-5e3d55b6e1b8" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/be79dcb0-334c-46a5-84b7-ca7d58aa971c" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/e4a38810-031f-42d6-a763-5484786bde5e" />
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/c707c2bb-2285-4d4a-bb86-e1fda51fe24f" />
-
-- Các tính năng chính
-    - Quản lý danh mục
-    - Quản lý tin tức (Thêm, sửa, xóa, tìm kiếm, phân trang)
-    - Quản lý đơn hàng
-    - Quản lý sản phẩm (Danh mục sản phẩm và Sản phẩm, tải nhiều ảnh)
-    - Quản lý tài khoản (Đăng ký, đăng nhập)
-    - Cấu hình hệ thống
-    - Giỏ hàng (Đặt hàng, gửi mail về cho người dùng và admin)
-    - Số lượng truy cập website (Theo ngày, tuần, tháng)
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/f1ba2ca2-a4b4-42bc-b9c4-3df75f79b4dc" />
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/6c68cf21-0fe1-4dea-b077-4ce03479f82a" />
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/f36391f2-f494-4885-8e77-902740b147d2" />
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/c1f19a65-d2cf-454c-926a-b2aac619028e" />
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/5d321fd1-b310-4d5f-9e38-59bee677e100" />
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/d7f6f6ea-7d25-42a4-87fe-844421a6e858" />
+<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/a2794ad9-6a09-4e4a-9e49-7d446796399d" />
 
 Kết quả:
 - Ưu điểm:
-    - Website hoạt động tốt, các chức năng hoạt động ổn định.
-    - Đề tài được hướng dẫn bởi giảng viên và cán bộ hướng dẫn đánh giá ổn.
+    - Hoàn thiện các chức năng chính: quản lý, phân phát, báo cáo.
+    - Phát triển chức năng báo cáo thống kê và log thao tác người dùng.
+    - Đảm bảo hệ thống ổn định, dễ sử dụng, minh bạch và hiệu quả.
 - Hạn chế:
     - Một số chức năng chưa triển khai và còn một số lỗi nhỏ.
-
-Liên hệ:
-
+    - Giao diện báo cáo và thống kê còn đơn giản.
+    - Hệ thống phân quyền cần được mở rộng thêm.
+      
+Liên hệ: 
 Nếu bạn có bất kỳ câu hỏi nào hoặc muốn đóng góp cho dự án, hãy liên hệ với tôi qua:
 - Email: dongnguyen17092003@gmail.com
 - Github: Dong2003
-
 
 
 
