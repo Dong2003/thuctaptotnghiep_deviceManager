@@ -2,7 +2,7 @@
 Đề tài thực tập tốt nghiệp:
   - Đây là đề tài nhóm gồm 5 người
   - Người thực hiện: Nguyễn Mậu Đông
-  - Thời gian: 25/08/2025 - 05/10/2025
+  - Thời gian: 3 tháng
 
 Thông tin chung:
   - Đơn vị thực tập: TRUNG TÂM CHUYỂN ĐỔI SỐ TỈNH BÌNH DƯƠNG PHÒNG KỸ THUẬT, TƯ VẤN CHUYỂN ĐỔI
