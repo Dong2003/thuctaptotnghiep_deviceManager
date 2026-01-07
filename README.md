@@ -19,6 +19,11 @@ Những công việc đã được giao và hoàn thành khi thực tập:
   - Xây dựng chức năng báo cáo thống kê toàn hệ thống.
   - Thiết kế chức năng ghi nhận thao tác người dùng.
   - Chức năng duyệt báo cáo sự cố thiết bị.
+  - Tham gia phân tích yêu cầu người dùng và quy trình vận hành thực tế.
+  - Kiểm thử chức năng, kiểm tra luồng xử lý và dữ liệu hệ thống.
+  - Hỗ trợ xây dựng biểu đồ hoạt động, báo cáo thống kê, chức năng duyệt sự cố và thao tác quản lý.
+  - Phối hợp nhóm để ghi nhận lỗi, chỉnh sửa và hoàn thiện hệ thống.
+  - Hỗ trợ hướng dẫn sử dụng hệ thống cho người dùng.
 
 Một số hình ảnh của dự án:
   - Giao diện Website - Quản lý trang thiết bị công nghệ thông tin của các chức năng tôi đã làm:
@@ -40,6 +45,8 @@ Kết quả:
     - Hoàn thiện các chức năng chính: quản lý, phân phát, báo cáo.
     - Phát triển chức năng báo cáo thống kê và log thao tác người dùng.
     - Đảm bảo hệ thống ổn định, dễ sử dụng, minh bạch và hiệu quả.
+    - Hiểu rõ quy trình vận hành phần mềm, kiểm tra dữ liệu và hỗ trợ người dùng trong môi trường cơ quan nhà nước.
+    - Nâng cao kỹ năng xử lý lỗi, làm việc nhóm và phối hợp hỗ trợ kỹ thuật.
 - Hạn chế:
     - Một số chức năng chưa triển khai và còn một số lỗi nhỏ.
     - Giao diện báo cáo và thống kê còn đơn giản.
